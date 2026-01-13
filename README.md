@@ -25,7 +25,7 @@ Apple App Attest is a framework that allows iOS apps to cryptographically attest
 - **A Production Validator**: Does NOT verify RP ID hashes or nonces  
 - **A DeviceCheck Client**: Does NOT call DeviceCheck APIs or generate attestations  
 
-**Important**: This tool only decodes structure. For production use, you must implement complete server-side validation as described in the [Security Notes](#security-notes) section.
+This tool only decodes structure. For production validation, see [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md).
 
 ## Components
 
@@ -86,7 +86,7 @@ echo "BASE64_ATTESTATION_STRING" | ./AppAttestDecoderCLI attest
 ./AppAttestDecoderCLI attest --json --base64 "BASE64_STRING"
 ```
 
-**Note**: The CLI `attest` command only parses and displays the structure of attestation objects. It does **not** validate signatures, certificates, or perform security checks. For production validation, see the [Security Notes](#security-notes) section.
+**Note**: The CLI `attest` command only parses structure. For production validation, see [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md).
 
 #### Decode Assertion
 
@@ -107,7 +107,7 @@ echo "BASE64_ATTESTATION_STRING" | ./AppAttestDecoderCLI attest
 ./AppAttestDecoderCLI assert --base64 "BASE64_STRING"
 ```
 
-**Note**: The CLI `assert` command only parses and displays the structure of assertion objects. It does **not** validate signatures, certificates, or perform security checks. For production validation, see the [Security Notes](#security-notes) section.
+**Note**: The CLI `assert` command only parses structure. For production validation, see [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md).
 
 #### Self-Test
 
@@ -162,7 +162,7 @@ print("Algorithm: \(assertion.algorithm ?? -1)")
 print("Signature: \(assertion.signature.count) bytes")
 ```
 
-**Note**: The `decodeAttestationObject` and `decodeAssertion` methods only parse the CBOR structure and extract fields. They do **not** verify cryptographic signatures, validate certificate chains, or perform any security checks. See the [Security Notes](#security-notes) section for required validation steps.
+**Note**: The `decodeAttestationObject` and `decodeAssertion` methods only parse structure. For production validation, see [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md).
 
 ## Testing
 
@@ -342,121 +342,23 @@ AppAttestDecoderCLI/
 
 ## Limitations
 
-- **This tool only decodes artifacts; it does not validate cryptographic signatures or certificate chains**
-- **Certificate chain validation is not performed**: The decoder parses DER-encoded X.509 certificates from `attStmt.x5c`, but does not validate them against Apple's App Attest Root CA. For security in production, you must validate the certificate chain following Apple's [Attestation Object Validation Guide](https://developer.apple.com/documentation/devicecheck/validating_app_attest_assertions_and_attestations).
-- The decoder does not call DeviceCheck APIs; it only parses already-generated artifacts
+This tool only decodes structure. It does not validate cryptographic signatures, certificate chains, or perform security checks. The decoder does not call DeviceCheck APIs; it only parses already-generated artifacts.
+
+For production validation requirements, see [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md).
 
 ## Security Notes
 
-**Critical**: This decoder only parses attestation objects. It does not perform any security validation. For production use, you must implement complete server-side validation as described below.
+This decoder only parses structure. It does not perform cryptographic validation, certificate chain verification, or security checks.
 
-> **See also**: Apple's official [Attestation Object Validation Guide](https://developer.apple.com/documentation/devicecheck/validating_app_attest_assertions_and_attestations) for complete validation requirements and best practices.
-
-### Quick Reference: Production Validation Checklist
-
-| Step | Requirement | Security Impact |
-|------|-------------|-----------------|
-| Format validation | Verify `fmt == "apple-appattest"` | Prevents invalid format acceptance |
-| RP ID hash verification | SHA256(bundle ID) must match `authData.rpIdHash` | Ensures attestation is for your app |
-| Certificate chain validation | Validate `attStmt.x5c` against Apple's App Attest Root CA | Prevents forged attestations |
-| Signature verification | Verify attestation signature using validated certificate | Ensures data integrity |
-| Nonce/challenge verification | Compare SHA256(authData + clientDataHash) with certificate extension OID 1.2.840.113635.100.8.2 | **Prevents replay attacks** |
-| Challenge uniqueness | Each challenge must be used only once | **Prevents replay attacks** |
-| Team ID validation | Verify certificate chain corresponds to expected Team ID | Ensures attestation is from your team |
-
-### Certificate Chain Validation
-
-Certificate chain validation must be performed using **Apple's App Attest Root CA** as the trust anchor. The certificate chain in `attStmt.x5c` must be validated against Apple's trusted root certificate before any cryptographic verification. This is a fundamental security requirement - without proper certificate chain validation, an attacker could present a forged attestation.
-
-Apple's App Attest Root CA certificate is publicly available and should be used as the sole trust anchor for validating App Attest certificate chains. Do not accept certificate chains that do not validate against this root.
-
-### Replay Attack Prevention
-
-The nonce/challenge validation step is **essential for preventing replay attacks**. Apple's validation process requires:
-
-1. **Generate a unique server challenge** for each attestation request (never reuse challenges)
-2. **Compute `clientDataHash`** as SHA256 of your server challenge
-3. **Compute `nonce`** as SHA256(authData + clientDataHash)
-4. **Extract the nonce** from the attestation certificate extension (OID 1.2.840.113635.100.8.2)
-5. **Compare** the computed nonce with the extracted nonce - they must match exactly
-
-This ensures that:
-- The attestation was generated in response to your specific challenge
-- The attestation cannot be replayed from a previous request
-- The authenticator data corresponds to the challenge you issued
-
-**Never skip nonce validation** - it is a critical security control that prevents attackers from reusing old attestations.
-
-### Complete Validation Checklist
-
-For production deployment, ensure your backend validation includes:
-
-- [ ] Format validation: `fmt == "apple-appattest"`
-- [ ] RP ID hash verification: SHA256(bundle identifier) matches `authData.rpIdHash`
-- [ ] Certificate chain validation: Validate `attStmt.x5c` against Apple's App Attest Root CA
-- [ ] Cryptographic signature verification: Verify attestation signature using the validated certificate chain
-- [ ] Nonce/challenge verification: Compare SHA256(authData + clientDataHash) with certificate extension OID 1.2.840.113635.100.8.2
-- [ ] Challenge uniqueness: Ensure each challenge is used only once (implement challenge tracking/expiration)
-- [ ] Team ID validation: Verify the certificate chain corresponds to your expected Team ID
-
-Refer to Apple's [Attestation Object Validation Guide](https://developer.apple.com/documentation/devicecheck/validating_app_attest_assertions_and_attestations) for complete validation requirements.
-
-### Security Best Practices
-
-**Logging Sensitive Data**: Attestation objects contain device-specific information and cryptographic material. Avoid logging raw attestation data, certificate contents, or authenticator data in production logs. If logging is necessary for debugging, use sanitized representations (e.g., hash values, certificate fingerprints) and ensure logs are properly secured and access-controlled.
+For production use, implement complete server-side validation. See [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md) for the full validation checklist and Apple's [Attestation Object Validation Guide](https://developer.apple.com/documentation/devicecheck/validating_app_attest_assertions_and_attestations) for official requirements.
 
 ## Use Cases
 
 ### Backend Validation
 
-The decoder can be integrated into backend services to validate App Attest artifacts. After decoding, you must perform additional validation steps as outlined in Apple's documentation:
+The decoder can be integrated into backend services to parse App Attest artifacts. After decoding, implement complete server-side validation.
 
-```swift
-// In your backend service
-let decoder = AppAttestDecoder(teamID: expectedTeamID)
-let attestation = try decoder.decodeAttestationObject(attestationData)
-
-// Step 1: Validate structure
-guard attestation.format == "apple-appattest" else { throw ValidationError() }
-
-// Step 2: Verify RP ID Hash
-// The RP ID hash in authData must match SHA256 of your app's bundle identifier
-let expectedRPIDHash = SHA256.hash(data: "com.yourcompany.yourapp".data(using: .utf8)!)
-guard attestation.authenticatorData.rpIdHash == expectedRPIDHash else { 
-    throw ValidationError("RP ID hash mismatch") 
-}
-
-// Step 3: Validate certificate chain
-// CRITICAL: Validate certificate chain against Apple's App Attest Root CA as trust anchor
-let certificates = attestation.attestationStatement.x5c
-// ... perform X.509 certificate chain validation using Apple's App Attest Root CA
-// ... verify signature using the validated leaf certificate
-
-// Step 4: Verify nonce/challenge (CRITICAL for replay attack prevention)
-// Construct: nonce = SHA256(authData + clientDataHash)
-// where clientDataHash = SHA256 of your unique server challenge
-// IMPORTANT: Each challenge must be unique and used only once
-let clientDataHash = SHA256.hash(data: uniqueServerChallenge.data(using: .utf8)!)
-let authData = attestation.authenticatorData.rawData
-let computedNonce = SHA256.hash(data: authData + clientDataHash)
-
-// Extract nonce from attestation certificate extension (OID 1.2.840.113635.100.8.2)
-// Compare extracted nonce with computed nonce - they must match exactly
-// ... extract nonce from certificate extension and compare
-guard extractedNonce == computedNonce else {
-    throw ValidationError("Nonce mismatch - possible replay attack")
-}
-
-// Step 5: Mark challenge as used (prevent replay)
-// ... record that this challenge has been used and cannot be reused
-```
-
-**Important**: The decoder only handles parsing. Full server validation requires:
-1. Certificate chain validation against Apple's App Attest Root CA (as the trust anchor)
-2. Cryptographic signature verification using the validated certificate chain
-3. RP ID hash verification (SHA256 of bundle identifier)
-4. Nonce/challenge verification (comparing SHA256(authData + clientDataHash) with certificate extension) - **essential for replay attack prevention**
-5. Challenge tracking to ensure each challenge is used only once
+See [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md) for the full validation checklist and example implementation.
 
 ### CI/CD Integration
 
@@ -487,7 +389,7 @@ For complete instructions on:
 
 See [docs/TEST_APP_GUIDE.md](docs/TEST_APP_GUIDE.md).
 
-**Important**: The test app is a separate tool used to generate artifacts. This decoder CLI only parses the generated artifacts; it does not generate them or perform validation.
+The test app is a separate tool used to generate artifacts. This decoder CLI only parses the generated artifacts.
 
 ## License
 
@@ -501,12 +403,13 @@ Contributions are welcome! Please see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.m
 - Code style guidelines
 - Development setup
 
-**Important**: This project is a decoder only. It does not perform cryptographic validation. See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for details on what contributions are appropriate.
+This project is a decoder only. It does not perform cryptographic validation. See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for details.
 
 ## Documentation
 
 - [docs/HOW_TO_USE.md](docs/HOW_TO_USE.md) - Complete CLI usage guide
 - [docs/TEST_APP_GUIDE.md](docs/TEST_APP_GUIDE.md) - Guide for using companion test apps
+- [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md) - Production validation checklist
 - [docs/QA_FLOW.md](docs/QA_FLOW.md) - Quality assurance procedures
 - [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) - Complete project audit and status
 - [CHANGELOG.md](CHANGELOG.md) - Version history and release notes
