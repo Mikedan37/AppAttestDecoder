@@ -1,0 +1,27 @@
+# Code Owners
+
+This file defines code owners for the repository. Code owners are automatically requested for review when their files are modified.
+
+# Default owner for all files
+* @maintainer
+
+# Documentation
+*.md @maintainer
+docs/ @maintainer
+
+# Core framework
+AppAttestCore/ @maintainer
+
+# CLI
+AppAttestDecoderCLI/ @maintainer
+
+# Tests
+*Tests/ @maintainer
+
+# Build configuration
+Package.swift @maintainer
+*.xcodeproj/ @maintainer
+
+# CI/CD
+.github/ @maintainer
+
