@@ -31,7 +31,6 @@ public struct ASN1Decoder {
         let length = try parseLength(data, &index)
         guard index + length <= data.count else { throw ASN1Error.truncated }
 
-        let contentStart = index
         let content = data.subdata(in: index ..< index + length)
         index += length
 

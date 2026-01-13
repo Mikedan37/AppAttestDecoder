@@ -46,12 +46,10 @@ public struct AttStmt {
         if sigValue == nil {
             // Signature might be at different integer keys, check for byte strings with integer keys
             for (key, value) in map {
-                if case .byteString = value {
-                    if case .negative = key {
-                        // Common signature key might be a negative integer
-                        sigValue = value.bytes
-                        break
-                    }
+                if case .byteString = value, case .negative = key {
+                    // Common signature key might be a negative integer
+                    sigValue = value.bytes
+                    break
                 }
             }
         }
