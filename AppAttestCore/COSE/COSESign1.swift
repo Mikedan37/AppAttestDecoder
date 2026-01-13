@@ -10,11 +10,23 @@ import Foundation
 /// Minimal COSE_Sign1 decoder per RFC 8152 / 9052.
 /// Expects a CBOR array of the form:
 /// [ protected : bstr, unprotected : map, payload : bstr / null, signature : bstr ]
+/// This structure is decoded but NOT verified. All fields are exposed for validator consumption.
 public struct COSESign1 {
 
+    /// Protected header (CBOR-encoded map, typically contains algorithm).
+    /// This header is parsed but NOT validated. Consumers must verify algorithm and other parameters.
     public let protectedHeader: COSEHeader
+    
+    /// Unprotected header (CBOR map, may contain additional parameters).
+    /// This header is parsed but NOT validated. Consumers must verify any parameters they use.
     public let unprotectedHeader: COSEHeader
+    
+    /// Payload (byte string or null). For assertions, this contains authenticator data.
+    /// This value is extracted but NOT validated. Consumers must parse and validate payload separately.
     public let payload: Data?
+    
+    /// Signature bytes. Cryptographic signature over the protected header and payload.
+    /// This value is extracted but NOT verified. Consumers must verify signature using appropriate keys.
     public let signature: Data
 
     public init(from value: CBORValue) throws {

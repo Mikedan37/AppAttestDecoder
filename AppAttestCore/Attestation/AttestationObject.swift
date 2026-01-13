@@ -15,11 +15,25 @@ import Foundation
 
 public struct AttestationObject {
 
+    /// Format identifier (e.g., "apple-appattest").
+    /// This value is parsed but NOT validated. Consumers must verify format matches expected value.
     public let format: String
+    
+    /// Parsed authenticator data containing RP ID hash, flags, sign count, and optional credential data.
+    /// All fields are parsed but NOT validated. See `AuthenticatorData` for raw material accessors.
     public let authenticatorData: AuthenticatorData
+    
+    /// Attestation statement containing signature and certificate chain.
+    /// Signature and certificates are parsed but NOT validated. See `AttStmt` for raw material accessors.
     public let attestationStatement: AttStmt
+    
+    /// Raw CBOR-encoded attestation object bytes.
+    /// This is the original input data before any parsing. Useful for validators that need to reconstruct
+    /// the exact structure for signature verification.
+    /// May be nil if object was constructed from CBORValue directly (without original bytes).
+    public let rawData: Data?
 
-    public init(cbor: CBORValue) throws {
+    public init(cbor: CBORValue, rawData: Data? = nil) throws {
         let topLevel: CBORValue
 
         // Step 1: unwrap CBOR tag if present
@@ -196,6 +210,7 @@ public struct AttestationObject {
         self.format = format
         self.authenticatorData = try AuthenticatorData(rawData: finalAuthData)
         self.attestationStatement = try AttStmt(cbor: attStmtValue)
+        self.rawData = rawData
     }
 }
 

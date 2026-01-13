@@ -3,15 +3,33 @@ import Foundation
 public struct AuthenticatorData {
 
     // MARK: - Core fields
-    public let rpIdHash: Data          // 32 bytes
+    
+    /// RP ID hash (32 bytes). SHA256 of the relying party identifier (typically bundle ID).
+    /// This value is parsed but NOT validated. Consumers must verify it matches expected RP ID.
+    public let rpIdHash: Data
+    
+    /// Authenticator flags byte. Parsed into individual flag properties.
+    /// Flags are parsed but NOT interpreted. Consumers must apply their own policy.
     public let flags: Flags
+    
+    /// Signature counter (4 bytes, big-endian). Monotonically increasing counter.
+    /// This value is parsed but NOT validated. Consumers must verify counter increments.
     public let signCount: UInt32
 
     // MARK: - Optional sections
+    
+    /// Attested credential data (present if flags.attestedCredentialData is set).
+    /// Contains AAGUID, credential ID, and COSE public key. All fields are parsed but NOT validated.
     public let attestedCredentialData: AttestedCredentialData?
+    
+    /// Extensions (CBOR-encoded). Present if flags.extensionsIncluded is set.
+    /// This value is parsed but NOT validated. Consumers must parse and validate extensions separately.
     public let extensions: CBORValue?
 
     // MARK: - Raw
+    
+    /// Raw authenticator data bytes as received from the attestation/assertion.
+    /// This is the exact byte sequence that validators need for signature verification.
     public let rawData: Data
 
     public init(rawData: Data, extensions: CBORValue? = nil) throws {
@@ -68,10 +86,21 @@ extension AuthenticatorData {
 }
 
 // MARK: - Attested Credential Data
+
+/// Attested credential data from authenticator data.
+/// All fields are parsed but NOT validated. Consumers must verify AAGUID, credential ID, and public key.
 public struct AttestedCredentialData {
 
-    public let aaguid: Data            // 16 bytes
+    /// AAGUID (16 bytes). Authenticator Attestation Globally Unique Identifier.
+    /// This value is parsed but NOT validated. Consumers must verify AAGUID matches expected authenticator.
+    public let aaguid: Data
+    
+    /// Credential ID (variable length). Unique identifier for this credential.
+    /// This value is parsed but NOT validated. Consumers must track credential IDs for key management.
     public let credentialId: Data
+    
+    /// Credential public key (CBOR-encoded COSE key structure).
+    /// This value is decoded but NOT validated. Consumers must parse COSE key and verify key type/parameters.
     public let credentialPublicKey: CBORValue
 
     public init(from data: Data, cursor: inout Int) throws {

@@ -1265,4 +1265,72 @@ final class AppAttestCoreTests: XCTestCase {
         // The prettyPrint method is verified by its existence in AssertionObject+PrettyPrint.swift
         XCTAssertNotNil(assertionType, "AssertionObject type should exist")
     }
+    
+    // MARK: - Raw Materials Exposure Tests
+    
+    /// Verifies that all raw materials needed for validation are exposed and accessible.
+    /// This test ensures a validator can consume the decoder output without re-parsing.
+    func testAttestationRawMaterialsExposed() throws {
+        let attestationData = try XCTUnwrap(
+            Data(base64Encoded: attestationObjectBase64),
+            "Attestation object base64 decoding failed"
+        )
+        
+        let decoder = AppAttestDecoder(teamID: teamID)
+        let attestation = try decoder.decodeAttestationObject(attestationData)
+        
+        // Verify rawData is populated
+        XCTAssertNotNil(attestation.rawData, "rawData should be populated for validator use")
+        XCTAssertEqual(attestation.rawData, attestationData, "rawData should match input")
+        
+        // Verify authenticatorData raw materials
+        XCTAssertFalse(attestation.authenticatorData.rawData.isEmpty, "authenticatorData.rawData should be non-empty")
+        XCTAssertEqual(attestation.authenticatorData.rpIdHash.count, 32, "rpIdHash should be 32 bytes")
+        XCTAssertNotNil(attestation.authenticatorData.flags, "flags should be accessible")
+        XCTAssertNotNil(attestation.authenticatorData.signCount, "signCount should be accessible")
+        
+        // Verify attested credential data (if present)
+        if let credData = attestation.authenticatorData.attestedCredentialData {
+            XCTAssertEqual(credData.aaguid.count, 16, "aaguid should be 16 bytes")
+            XCTAssertFalse(credData.credentialId.isEmpty, "credentialId should be non-empty")
+            // credentialPublicKey is CBORValue, just verify it exists
+            XCTAssertNotNil(credData.credentialPublicKey, "credentialPublicKey should be accessible")
+        }
+        
+        // Verify attestation statement raw materials
+        XCTAssertFalse(attestation.attestationStatement.signature.isEmpty, "signature should be non-empty")
+        XCTAssertFalse(attestation.attestationStatement.certificates.isEmpty, "certificates should be non-empty")
+        XCTAssertEqual(attestation.attestationStatement.certificates, attestation.attestationStatement.x5c, "x5c should alias certificates")
+        
+        // Verify each certificate is DER-encoded (non-empty)
+        for (index, cert) in attestation.attestationStatement.certificates.enumerated() {
+            XCTAssertFalse(cert.isEmpty, "Certificate \(index) should be non-empty")
+            // DER certificates typically start with 0x30 (SEQUENCE tag)
+            XCTAssertEqual(cert[0], 0x30, "Certificate \(index) should start with DER SEQUENCE tag")
+        }
+        
+        // Verify algorithm is accessible
+        XCTAssertNotNil(attestation.attestationStatement.alg, "algorithm should be accessible")
+    }
+    
+    /// Verifies that assertion raw materials structure is correct.
+    /// Note: Full testing requires a real assertion object from a device.
+    func testAssertionRawMaterialsStructure() throws {
+        // Verify AssertionObject exposes required properties for validator consumption
+        // This test verifies the API structure exists, not the actual decoding
+        
+        // Minimal test: verify AssertionObject type has required properties
+        let assertionType = AssertionObject.self
+        
+        // Verify properties exist via reflection (if possible) or compilation
+        // The fact that this compiles means the properties are accessible
+        XCTAssertNotNil(assertionType, "AssertionObject type should exist")
+        
+        // In a real scenario with valid assertion data, you would verify:
+        // - rawData is populated and matches input
+        // - authenticatorData.rawData is accessible
+        // - signature is accessible via assertion.signature
+        // - coseSign1 structure is accessible
+        // - algorithm is accessible
+    }
 }

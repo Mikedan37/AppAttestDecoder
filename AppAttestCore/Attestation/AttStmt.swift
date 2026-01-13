@@ -4,11 +4,25 @@ public enum AttStmtError: Error {
     case invalidFormat
 }
 
+/// Attestation statement containing signature and certificate chain.
+/// All fields are parsed but NOT validated. Consumers must perform full certificate chain validation
+/// and signature verification using these raw materials.
 public struct AttStmt {
 
+    /// Algorithm identifier (COSE algorithm number, e.g., -7 for ES256).
+    /// This value is parsed but NOT validated. Consumers must verify algorithm matches expected value.
     public let alg: Int?
+    
+    /// Attestation signature bytes. This is the cryptographic signature over the attestation object.
+    /// This value is extracted but NOT verified. Consumers must verify signature using validated certificate.
     public let signature: Data
+    
+    /// Certificate chain as array of DER-encoded X.509 certificates.
+    /// Certificates are extracted but NOT validated. Consumers must perform full certificate chain validation
+    /// against Apple's App Attest Root CA before using any certificate for signature verification.
     public let certificates: [Data]
+    
+    /// Raw CBOR-encoded attestation statement. Useful for debugging or custom parsing.
     public let rawCBOR: CBORValue
 
     public init(cbor: CBORValue) throws {
@@ -33,7 +47,7 @@ public struct AttStmt {
             // Signature might be at different integer keys, check for byte strings with integer keys
             for (key, value) in map {
                 if case .byteString = value {
-                    if case .negative(let intKey) = key {
+                    if case .negative = key {
                         // Common signature key might be a negative integer
                         sigValue = value.bytes
                         break
@@ -50,6 +64,9 @@ public struct AttStmt {
         self.certificates = x5cValue ?? []
     }
 
+    /// Certificate chain accessor (alias for `certificates`).
+    /// Returns DER-encoded X.509 certificates. These are NOT validated.
+    /// Consumers must perform full certificate chain validation before use.
     public var x5c: [Data] {
         certificates
     }

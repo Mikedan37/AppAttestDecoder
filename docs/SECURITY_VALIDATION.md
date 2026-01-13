@@ -2,6 +2,8 @@
 
 This document provides a complete checklist for implementing server-side validation of App Attest artifacts. The decoder in this project only parses structure; all security validation must be implemented separately.
 
+**Important**: The decoder exposes all raw materials needed for validation (signatures, certificate chains, authenticator data bytes, RP ID hashes) via its public API. A validator can consume these without re-parsing the original bytes. All exposed properties are documented as unvalidated.
+
 > **See also**: Apple's official [Attestation Object Validation Guide](https://developer.apple.com/documentation/devicecheck/validating_app_attest_assertions_and_attestations) for complete validation requirements and best practices.
 
 ## Quick Reference: Production Validation Checklist
@@ -61,6 +63,14 @@ This ensures that:
 // In your backend service
 let decoder = AppAttestDecoder(teamID: expectedTeamID)
 let attestation = try decoder.decodeAttestationObject(attestationData)
+
+// All raw materials are exposed via the decoder API:
+// - attestation.rawData: Original CBOR bytes for signature verification
+// - attestation.authenticatorData.rpIdHash: RP ID hash (32 bytes)
+// - attestation.authenticatorData.rawData: Authenticator data bytes
+// - attestation.attestationStatement.signature: Signature bytes
+// - attestation.attestationStatement.x5c: Certificate chain (DER-encoded)
+// - attestation.attestationStatement.alg: Algorithm identifier
 
 // Step 1: Validate structure
 guard attestation.format == "apple-appattest" else { throw ValidationError() }

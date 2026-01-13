@@ -22,9 +22,11 @@ public enum AppAttest {
     // Empty enum used as namespace
 
     /// Decodes a raw attestation object into a structured representation.
+    /// - Parameter data: Raw attestation object bytes
+    /// - Returns: Parsed `AttestationObject` with rawData populated for validator consumption
     public static func decodeAttestationObject(_ data: Data) throws -> AttestationObject {
         let node = try CBORDecoder.decode(data)
-        return try AttestationObject(cbor: node)
+        return try AttestationObject(cbor: node, rawData: data)
     }
 
     /// Decodes a COSE Sign1 message into its payload and headers

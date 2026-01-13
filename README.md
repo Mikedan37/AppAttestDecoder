@@ -16,6 +16,7 @@ Apple App Attest is a framework that allows iOS apps to cryptographically attest
 - **A Decoder**: Parses CBOR-encoded App Attest structures and extracts their components  
 - **A CLI Tool**: Command-line interface for inspecting attestation objects and assertions  
 - **A Library**: Swift framework that can be integrated into other projects  
+- **Raw Materials Provider**: Exposes all parsed data needed for validator consumption without duplicate parsing  
 - **Educational**: Helps understand the structure of App Attest artifacts  
 
 ### What This Tool Is NOT
@@ -39,6 +40,7 @@ The core decoding library that provides:
 - **Attestation Statement Parser**: Extracts certificate chains (x5c) and signature data from attestation statements
 - **X.509 Certificate Parser**: Parses DER-encoded X.509 certificates from the attestation chain (note: does not perform certificate chain validation)
 - **COSE Sign1 Decoder**: Handles CBOR Object Signing and Encryption (COSE) structures
+- **Raw Materials API**: Exposes all parsed data (signatures, certificates, authenticator data bytes) for validator consumption without duplicate parsing
 
 ### Command-Line Interface
 
@@ -162,7 +164,7 @@ print("Algorithm: \(assertion.algorithm ?? -1)")
 print("Signature: \(assertion.signature.count) bytes")
 ```
 
-**Note**: The `decodeAttestationObject` and `decodeAssertion` methods only parse structure. For production validation, see [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md).
+**Note**: The `decodeAttestationObject` and `decodeAssertion` methods only parse structure. All raw materials (signatures, certificates, authenticator data) are exposed for validator consumption. For production validation, see [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md).
 
 ## Testing
 
@@ -263,6 +265,36 @@ The test suite uses real device-generated attestation objects captured from `App
    - AuthenticatorData (flags, RP ID hash, credential data)
    - AttestationStatement (certificate chain, signature)
    - X.509 certificates (DER-encoded)
+6. **Raw Materials Exposure**: All parsed data is exposed via public API for validator consumption
+
+### Architecture Pattern
+
+This decoder implements a clean separation between parsing and validation:
+
+```
+Device
+  ↓
+Test App (artifact generator)
+  ↓
+Decoder (structure, raw materials) ← This project
+  ↓
+Validator (policy, trust, lifecycle) ← Future work
+  ↓
+Application logic
+```
+
+**Design Principles:**
+- **Separation of Concerns**: Decoder only parses structure; validation is separate
+- **Raw Materials API**: All parsed data exposed for validator consumption without duplicate parsing
+- **No Policy Decisions**: Decoder makes no trust, security, or lifecycle decisions
+- **Explicit Boundaries**: Clear documentation of what is and isn't validated
+- **Reproducible**: Deterministic parsing with stable error semantics
+
+This pattern enables:
+- Shared validation logic without re-implementing parsing
+- Consistent error handling and observability
+- Clear separation between structure and policy
+- Standardized failure semantics across implementations
 
 ### Error Handling
 
@@ -350,6 +382,8 @@ For production validation requirements, see [docs/SECURITY_VALIDATION.md](docs/S
 
 This decoder only parses structure. It does not perform cryptographic validation, certificate chain verification, or security checks.
 
+All raw materials needed for validation (signatures, certificate chains, authenticator data bytes, RP ID hashes) are exposed via the public API. A validator can consume these without re-parsing the original bytes.
+
 For production use, implement complete server-side validation. See [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md) for the full validation checklist and Apple's [Attestation Object Validation Guide](https://developer.apple.com/documentation/devicecheck/validating_app_attest_assertions_and_attestations) for official requirements.
 
 ## Use Cases
@@ -413,4 +447,15 @@ This project is a decoder only. It does not perform cryptographic validation. Se
 - [docs/QA_FLOW.md](docs/QA_FLOW.md) - Quality assurance procedures
 - [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) - Complete project audit and status
 - [CHANGELOG.md](CHANGELOG.md) - Version history and release notes
+
+## Related Work
+
+This decoder is designed to be consumed by separate validator implementations. The architecture separates parsing (this project) from validation (future work), enabling:
+
+- Shared parsing logic without re-implementation
+- Consistent error semantics across validators
+- Clear boundaries between structure and policy
+- Standardized failure handling
+
+For validator implementations, see the [Raw Materials API](#architecture) section and [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md).
 

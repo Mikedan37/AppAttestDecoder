@@ -2,6 +2,8 @@
 
 Complete guide for using the App Attest Decoder CLI tool to decode and inspect Apple App Attest attestation objects and assertions.
 
+**Note**: The decoder exposes all raw materials (signatures, certificate chains, authenticator data bytes) needed for validation via its public API. A validator can consume these without re-parsing the original bytes. All exposed properties are documented as unvalidated.
+
 ## Table of Contents
 
 1. [Building the Tool](#building-the-tool)
@@ -655,9 +657,31 @@ let decoder = AppAttestDecoder(teamID: "YOUR_TEAM_ID")
 let attestationData = Data(base64Encoded: base64String)!
 let attestation = try decoder.decodeAttestationObject(attestationData)
 
+// Access parsed data - all raw materials are exposed for validator consumption
+print("Format: \(attestation.format)")
+print("RP ID Hash: \(attestation.authenticatorData.rpIdHash)")
+print("Certificate Count: \(attestation.attestationStatement.x5c.count)")
+
+// Access raw materials for validation (all unvalidated):
+// - attestation.rawData: Original CBOR bytes
+// - attestation.authenticatorData.rawData: Authenticator data bytes
+// - attestation.authenticatorData.rpIdHash: RP ID hash (32 bytes)
+// - attestation.attestationStatement.signature: Signature bytes
+// - attestation.attestationStatement.x5c: Certificate chain (DER-encoded)
+// - attestation.authenticatorData.attestedCredentialData?.credentialId: Credential ID
+// - attestation.authenticatorData.attestedCredentialData?.credentialPublicKey: COSE public key
+
 // Decode assertion
 let assertionData = Data(base64Encoded: assertionBase64String)!
 let assertion = try decoder.decodeAssertion(assertionData)
+print("Algorithm: \(assertion.algorithm ?? -1)")
+print("Signature: \(assertion.signature.count) bytes")
+
+// Access assertion raw materials (all unvalidated):
+// - assertion.rawData: Original assertion bytes
+// - assertion.authenticatorData.rawData: Authenticator data bytes
+// - assertion.signature: Signature bytes
+// - assertion.coseSign1: Full COSE_Sign1 structure
 
 // Pretty print
 print(attestation.prettyPrint())

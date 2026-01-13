@@ -27,10 +27,11 @@ public struct AppAttestDecoder {
 
     /// Decodes a full App Attest attestation object (CBOR encoded)
     /// - Parameter data: Raw attestation object bytes
-    /// - Returns: Parsed `AttestationObject`
+    /// - Returns: Parsed `AttestationObject` with all raw materials exposed for validator consumption
+    /// - Note: This method only parses structure. All validation must be performed separately.
     public func decodeAttestation(_ data: Data) throws -> AttestationObject {
         let cborValue = try CBORDecoder.decode(data)
-        return try AttestationObject(cbor: cborValue)
+        return try AttestationObject(cbor: cborValue, rawData: data)
     }
 
     /// Backwards-compatible API for tests and CLI
