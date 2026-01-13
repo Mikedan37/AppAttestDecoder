@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		90FB4A482F15A815009F238E /* AppAttestCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 90FB4A3D2F15A814009F238E /* AppAttestCore.framework */; };
+		90FB4B5A2F163DE9009F238E /* TestPlan.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = 90FB4B592F163DE9009F238E /* TestPlan.xctestplan */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,6 +55,7 @@
 		90FB4A302F15A6B1009F238E /* AppAttestDecoderTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppAttestDecoderTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		90FB4A3D2F15A814009F238E /* AppAttestCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = AppAttestCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		90FB4A472F15A815009F238E /* AppAttestCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppAttestCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		90FB4B592F163DE9009F238E /* TestPlan.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = TestPlan.xctestplan; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -172,6 +174,7 @@
 		90FB49CD2F11F2AD009F238E = {
 			isa = PBXGroup;
 			children = (
+				90FB4B592F163DE9009F238E /* TestPlan.xctestplan */,
 				90FB49D82F11F2AD009F238E /* AppAttestDecoderCLI */,
 				90FB49E72F146E9B009F238E /* AppAttestDecoderTestApp */,
 				90FB49F52F146E9C009F238E /* AppAttestDecoderTestAppTests */,
@@ -462,6 +465,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				90FB4B5A2F163DE9009F238E /* TestPlan.xctestplan in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

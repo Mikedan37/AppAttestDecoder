@@ -1,0 +1,45 @@
+{
+  "configurations" : [
+    {
+      "id" : "50246587-BCFC-409F-A806-277378AAD010",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:AppAttestDecoderCLI.xcodeproj",
+        "identifier" : "90FB4A2F2F15A6B1009F238E",
+        "name" : "AppAttestDecoderTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:AppAttestDecoderCLI.xcodeproj",
+        "identifier" : "90FB4A462F15A815009F238E",
+        "name" : "AppAttestCoreTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:AppAttestDecoderCLI.xcodeproj",
+        "identifier" : "90FB49FB2F146E9C009F238E",
+        "name" : "AppAttestDecoderTestAppUITests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:AppAttestDecoderCLI.xcodeproj",
+        "identifier" : "90FB49F12F146E9C009F238E",
+        "name" : "AppAttestDecoderTestAppTests"
+      }
+    }
+  ],
+  "version" : 1
+}

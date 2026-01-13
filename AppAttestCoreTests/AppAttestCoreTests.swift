@@ -8,6 +8,33 @@
 import XCTest
 @testable import AppAttestCore
 
+// MARK: - Test Helpers
+
+/// Test-only helper for opt-in pretty-print output during test execution.
+/// Silent by default; enable with PRINT_PRETTY=1 environment variable.
+enum PrettyPrintTestHarness {
+    /// Whether pretty-print output should be emitted during tests.
+    /// Controlled by PRINT_PRETTY environment variable (set to "1" to enable).
+    static let shouldPrint = ProcessInfo.processInfo.environment["PRINT_PRETTY"] == "1"
+    
+    /// Emit labeled pretty-print output if PRINT_PRETTY=1 is set.
+    /// - Parameters:
+    ///   - label: Descriptive label for this output block
+    ///   - output: The pretty-print string to emit
+    static func emit(_ label: String, _ output: String) {
+        guard shouldPrint else { return }
+        
+        print("""
+        ==============================
+        \(label)
+        ==============================
+        \(output)
+        ==============================
+        
+        """)
+    }
+}
+
 final class AppAttestCoreTests: XCTestCase {
 
     /// Real device-generated values captured from AppAttestDecoderTestApp
@@ -506,6 +533,9 @@ final class AppAttestCoreTests: XCTestCase {
         let attestation = try decoder.decodeAttestationObject(attestationData)
         
         let output = attestation.prettyPrint()
+        
+        // Opt-in pretty-print output (silent unless PRINT_PRETTY=1)
+        PrettyPrintTestHarness.emit("Attestation Pretty Print Output", output)
         
         // Verify main fields are present
         XCTAssertTrue(
