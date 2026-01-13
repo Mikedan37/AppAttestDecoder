@@ -25,7 +25,7 @@ jobs:
       
     - name: Build AppAttestCore
       run: |
-        xcodebuild -target AppAttestCore -configuration Debug clean build
+        xcodebuild -scheme AppAttestCore -configuration Debug clean build
       
     - name: Run unit tests
       run: |
@@ -34,5 +34,5 @@ jobs:
       
     - name: Build CLI
       run: |
-        xcodebuild -target AppAttestDecoderCLI -configuration Debug clean build
+        xcodebuild -scheme AppAttestDecoderCLI -configuration Debug clean build
 

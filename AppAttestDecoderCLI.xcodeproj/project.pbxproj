@@ -221,10 +221,10 @@
 			buildRules = (
 			);
 			dependencies = (
+				90FB4A4A2F15A815009F238E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				90FB49D82F11F2AD009F238E /* AppAttestDecoderCLI */,
-				90FB4A312F15A6B1009F238E /* AppAttestDecoderTests */,
 			);
 			name = AppAttestDecoderCLI;
 			packageProductDependencies = (
