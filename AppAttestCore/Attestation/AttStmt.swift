@@ -39,17 +39,24 @@ public struct AttStmt {
         
         // Fallback: check for integer keys (Apple sometimes uses integer keys)
         // Common integer keys in COSE: 1 = alg, 4 = kid, 33 = x5c
-        // For signature, we'll check common integer keys
         if algValue == nil {
             algValue = map[.unsigned(1)]?.intValue ?? map[.negative(-1)]?.intValue
         }
         if sigValue == nil {
-            // Signature might be at different integer keys, check for byte strings with integer keys
-            for (key, value) in map {
-                if case .byteString = value, case .negative = key {
-                    // Common signature key might be a negative integer
-                    sigValue = value.bytes
-                    break
+            // Signature might be at different integer keys, check for byte strings
+            // Try common COSE integer keys first
+            if let sig = map[.unsigned(4)]?.bytes ?? map[.negative(-4)]?.bytes {
+                sigValue = sig
+            } else {
+                // Search for any byte string that might be a signature (typically 64-72 bytes for ES256)
+                for (_, value) in map {
+                    if case .byteString(let bytes) = value {
+                        // ES256 signatures are typically 64 bytes, but can be 70-72 with ASN.1 encoding
+                        if bytes.count >= 60 && bytes.count <= 80 {
+                            sigValue = bytes
+                            break
+                        }
+                    }
                 }
             }
         }

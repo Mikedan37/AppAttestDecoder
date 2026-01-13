@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TestPlan
+   LastUpgradeVersion = "1500"
+   version = "1.0">
+   <TestTargets>
+      <TestTargetReference
+         target = "AppAttestCoreTests">
+      </TestTargetReference>
+   </TestTargets>
+   <DefaultOptions>
+      <CommandLineArgumentEntries>
+      </CommandLineArgumentEntries>
+      <EnvironmentVariableEntries>
+      </EnvironmentVariableEntries>
+      <Language>
+         <Language>en</Language>
+      </Language>
+      <Region>
+         <Region>en_US</Region>
+      </Region>
+      <TestTimeoutsEnabled>
+         <TestTimeoutsEnabled>YES</TestTimeoutsEnabled>
+      </TestTimeoutsEnabled>
+      <TestExecutionOrdering>
+         <TestExecutionOrdering>random</TestExecutionOrdering>
+      </TestExecutionOrdering>
+   </DefaultOptions>
+   <Options>
+   </Options>
+</TestPlan>
+

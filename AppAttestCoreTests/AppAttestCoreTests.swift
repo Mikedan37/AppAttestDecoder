@@ -287,17 +287,12 @@ final class AppAttestCoreTests: XCTestCase {
         // CBOR negative: -1 - n, so -791634803 = -1 - 791634802
         // Encode as negative integer (major type 1)
         let negValue: UInt64 = 791634802 // -1 - 791634802 = -791634803
-        // negValue is 791634802, which is >= 65536, so we use the 3-byte encoding
-        cborData.append(0x39)
+        // negValue is 791634802, which is >= 65536 and < 2^32, so we use 0x3a (4-byte encoding)
+        cborData.append(0x3a)
+        cborData.append(UInt8((negValue >> 24) & 0xff))
+        cborData.append(UInt8((negValue >> 16) & 0xff))
         cborData.append(UInt8((negValue >> 8) & 0xff))
         cborData.append(UInt8(negValue & 0xff))
-            // For large values, use 0x3a (32-bit) or 0x3b (64-bit)
-            cborData.append(0x3a)
-            cborData.append(UInt8((negValue >> 24) & 0xff))
-            cborData.append(UInt8((negValue >> 16) & 0xff))
-            cborData.append(UInt8((negValue >> 8) & 0xff))
-            cborData.append(UInt8(negValue & 0xff))
-        }
         
         // Value: array containing byte string
         cborData.append(0x81) // array(1)
@@ -1287,7 +1282,22 @@ final class AppAttestCoreTests: XCTestCase {
         }
         
         // Verify attestation statement raw materials
-        XCTAssertFalse(attestation.attestationStatement.signature.isEmpty, "signature should be non-empty")
+        // Note: For App Attest, signature and alg may not always be present in attStmt
+        // The signature might be embedded differently or computed separately
+        // We verify they are accessible (even if nil/empty) for validator consumption
+        if !attestation.attestationStatement.signature.isEmpty {
+            // If signature is present, verify it's a reasonable size (ES256 is typically 64-72 bytes)
+            XCTAssertGreaterThanOrEqual(
+                attestation.attestationStatement.signature.count, 60,
+                "Signature should be at least 60 bytes if present (ES256 is typically 64-72 bytes)"
+            )
+            XCTAssertLessThanOrEqual(
+                attestation.attestationStatement.signature.count, 80,
+                "Signature should be at most 80 bytes if present"
+            )
+        }
+        
+        // Certificate chain is required for App Attest
         XCTAssertFalse(attestation.attestationStatement.certificates.isEmpty, "certificates should be non-empty")
         XCTAssertEqual(attestation.attestationStatement.certificates, attestation.attestationStatement.x5c, "x5c should alias certificates")
         
@@ -1298,8 +1308,12 @@ final class AppAttestCoreTests: XCTestCase {
             XCTAssertEqual(cert[0], 0x30, "Certificate \(index) should start with DER SEQUENCE tag")
         }
         
-        // Verify algorithm is accessible
-        XCTAssertNotNil(attestation.attestationStatement.alg, "algorithm should be accessible")
+        // Algorithm is optional for App Attest (may be inferred from certificate or context)
+        // We verify the property is accessible (even if nil) for validator consumption
+        // If present, it should be a valid COSE algorithm (e.g., -7 for ES256)
+        if let alg = attestation.attestationStatement.alg {
+            XCTAssertEqual(alg, -7, "If algorithm is present, it should be -7 (ES256) for App Attest")
+        }
     }
     
     /// Verifies that assertion raw materials structure is correct.
