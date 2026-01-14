@@ -48,6 +48,8 @@ A minimal CLI tool (`AppAttestDecoderCLI`) that provides:
 
 - Decoding of attestation objects from base64 input
 - Decoding of assertion objects
+- **Forensic mode**: Lossless inspection and export (human-readable tree + JSON)
+  - See [docs/FORENSIC_MODE.md](docs/FORENSIC_MODE.md) for details
 - Pretty-printing with hierarchical formatting
 - Research annotation and comparison across execution contexts
 
