@@ -459,7 +459,9 @@ This project provides a research instrument for observing how Apple's App Attest
 
 **What we do not do**: Share keys, forge identity, circumvent DeviceCheck, rebind trust.
 
-See [docs/EXTENSION_SETUP.md](docs/EXTENSION_SETUP.md) for setup instructions.
+**Extension not appearing?** See [docs/QUICK_FIX_EXTENSION.md](docs/QUICK_FIX_EXTENSION.md) for a 5-minute fix guide.
+
+See [docs/EXTENSION_SETUP.md](docs/EXTENSION_SETUP.md) for complete setup instructions.
 
 ## Action Extension App Attest Identity Probe
 
