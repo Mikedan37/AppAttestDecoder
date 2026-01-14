@@ -71,7 +71,7 @@ public struct AuthenticatorData {
 // MARK: - Flags
 extension AuthenticatorData {
 
-    public struct Flags: Equatable {
+    public struct Flags: Equatable, Codable {
         public let rawValue: UInt8
 
         public init(rawValue: UInt8) {

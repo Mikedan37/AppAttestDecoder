@@ -35,6 +35,21 @@ let optVerbose = options.contains("--verbose") || options.contains("-v")
 let optNoColor = options.contains("--no-color") || options.contains("--no-colour")
 let optVersion = options.contains("--version") || options.contains("-V")
 
+// Context annotation flags (for research)
+func getContext(from args: [String]) -> AttestationContext? {
+    guard let i = args.firstIndex(of: "--context"), args.count > i + 1 else {
+        return nil
+    }
+    return AttestationContext(rawValue: args[i + 1])
+}
+
+func getBundleID(from args: [String]) -> String? {
+    guard let i = args.firstIndex(of: "--bundle-id"), args.count > i + 1 else {
+        return nil
+    }
+    return args[i + 1]
+}
+
 // Handle --version flag early
 if optVersion {
     print("AppAttestDecoderCLI version \(CLI_VERSION)")
@@ -80,10 +95,20 @@ case "selftest":
         fatalError("Self-test failed")
     }
 
+case "analyze":
+    handleAnalyzeCommand(args: args, optJSON: optJSON, optVerbose: optVerbose)
+
 default:
     print("Unknown mode: \(mode)\n")
     printUsage()
     exit(1)
+}
+
+// MARK: - Utilities
+
+func printError(_ message: String) {
+    let data = (message + "\n").data(using: .utf8)!
+    FileHandle.standardError.write(data)
 }
 
 // MARK: - Input
@@ -327,31 +352,131 @@ func decodeAssertion(_ data: Data, hex: Bool, raw: Bool, json: Bool) {
 
 // MARK: - Usage
 
+func handleAnalyzeCommand(args: [String], optJSON: Bool, optVerbose: Bool) {
+    // Analysis mode: compare multiple AttestationSample entries
+    // Input: JSON file with array of AttestationSample objects
+    
+    guard let fileIndex = args.firstIndex(of: "--file"), args.count > fileIndex + 1 else {
+        printError("Error: analyze command requires --file <path> pointing to JSON file with AttestationSample array")
+        exit(1)
+    }
+    
+    let filePath = args[fileIndex + 1]
+    let url = URL(fileURLWithPath: filePath)
+    
+    guard let data = try? Data(contentsOf: url),
+          let samples = try? JSONDecoder().decode([AttestationSample].self, from: data) else {
+        printError("Error: Failed to read or parse AttestationSample JSON from \(filePath)")
+        exit(1)
+    }
+    
+    guard !samples.isEmpty else {
+        printError("Error: No samples found in JSON file")
+        exit(1)
+    }
+    
+    do {
+        let comparison = try AttestationComparison(samples: samples)
+        
+        if optJSON {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            encoder.dateEncodingStrategy = .iso8601
+            let jsonData = try encoder.encode(comparison)
+            print(String(data: jsonData, encoding: .utf8)!)
+        } else {
+            // Human-readable analysis output
+            print("Attestation Comparison Analysis")
+            print("================================")
+            print("")
+            print("Samples: \(samples.count)")
+            print("")
+            
+            // RP ID Hash consistency
+            print("RP ID Hash Analysis:")
+            if comparison.rpIdHashConsistent {
+                print("  [OK] All samples share the same RP ID hash")
+                if let firstHash = comparison.rpIdHashes.values.first {
+                    print("  Hash: \(firstHash.map { String(format: "%02x", $0) }.joined(separator: " "))")
+                }
+            } else {
+                print("  [DIFF] RP ID hashes differ across contexts:")
+                for (context, hash) in comparison.rpIdHashes {
+                    print("    \(context.description): \(hash.map { String(format: "%02x", $0) }.joined(separator: " "))")
+                }
+            }
+            print("")
+            
+            // Certificate chain lengths
+            print("Certificate Chain Analysis:")
+            if comparison.certificateChainLengthConsistent {
+                print("  [OK] All samples have consistent certificate chain lengths")
+                if let firstLength = comparison.certificateChainLengths.values.first {
+                    print("  Chain length: \(firstLength) certificates")
+                }
+            } else {
+                print("  [DIFF] Certificate chain lengths vary:")
+                for (context, length) in comparison.certificateChainLengths {
+                    print("    \(context.description): \(length) certificates")
+                }
+            }
+            print("")
+            
+            // Flags comparison
+            print("Authenticator Flags:")
+            for (context, flags) in comparison.flags {
+                print("  \(context.description):")
+                print("    userPresent: \(flags.userPresent)")
+                print("    userVerified: \(flags.userVerified)")
+                print("    attestedCredentialData: \(flags.attestedCredentialData)")
+                print("    extensionsIncluded: \(flags.extensionsIncluded)")
+            }
+            print("")
+            
+            // Context breakdown
+            print("Samples by Context:")
+            let contextGroups = Dictionary(grouping: samples) { $0.context }
+            for context in AttestationContext.allCases {
+                if let group = contextGroups[context], !group.isEmpty {
+                    print("  \(context.description): \(group.count) sample(s)")
+                }
+            }
+        }
+    } catch {
+        printError("Error: Failed to analyze samples: \(error)")
+        exit(1)
+    }
+}
+
 func printUsage() {
     print("""
     AppAttestDecoderCLI
 
     Usage:
-      appattest-decode attest [--base64 <b64> | --file <path>]
-      appattest-decode assert [--base64 <b64> | --file <path>]
-      appattest-decode pretty [--base64 <b64> | --file <path>] [--verbose]
+      appattest-decode attest [--base64 <b64> | --file <path>] [options]
+      appattest-decode assert [--base64 <b64> | --file <path>] [options]
+      appattest-decode pretty [--base64 <b64> | --file <path>] [options]
+      appattest-decode analyze --file <samples.json> [options]
       appattest-decode selftest
 
     Commands:
-      attest    Decode attestation object (legacy format)
-      assert    Decode assertion object (legacy format)
+      attest    Decode attestation object
+      assert    Decode assertion object
       pretty    Pretty-print attestation object with hierarchical formatting
+      analyze   Compare multiple attestation samples across execution contexts (research mode)
       selftest  Run self-test to verify CLI functionality
 
     Optional flags:
-      --version, -V    Print version and exit
-      --base64 <b64>   Provide base64 blob as command-line argument
-      --file <path>    Read base64 blob from file
-      --hex            Print hex dump of the input blob (attest/assert only)
-      --raw            Echo raw base64 of the input blob (attest/assert only)
-      --json           Print decoded structure as JSON (attest/assert only)
-      --verbose, -v    Enable verbose logging (pretty command only)
-      --no-color       Disable colorized output (pretty command only)
+      --version, -V       Print version and exit
+      --base64 <b64>      Provide base64 blob as command-line argument
+      --file <path>       Read base64 blob from file (or JSON samples for analyze)
+      --hex               Print hex dump of the input blob (attest/assert only)
+      --raw               Echo raw base64 of the input blob (attest/assert only)
+      --json              Print decoded structure as JSON
+      --verbose, -v       Enable verbose logging
+      --no-color          Disable colorized output (pretty command only)
+      --context <ctx>     Execution context (main|action|ui|sso|other) - for research annotation
+      --bundle-id <id>    Bundle identifier - for research annotation
 
     Input:
       - If no flag is provided, base64 is read from STDIN.
@@ -370,10 +495,15 @@ func printUsage() {
       
       # Pretty-print with verbose debugging
       ./AppAttestDecoderCLI pretty --base64 "BASE64_BLOB" --verbose
+      
+      # Analyze multiple samples across execution contexts (research)
+      ./AppAttestDecoderCLI analyze --file samples.json
+      ./AppAttestDecoderCLI analyze --file samples.json --json
 
     Notes:
       - This tool only decodes blobs. It never calls DeviceCheck.
       - Generate blobs on-device, then paste or pipe them here.
       - The 'pretty' command provides human-readable hierarchical output.
+      - The 'analyze' command compares samples across iOS execution contexts for research.
     """)
 }

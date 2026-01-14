@@ -448,6 +448,59 @@ This project is a decoder only. It does not perform cryptographic validation. Se
 - [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) - Complete project audit and status
 - [CHANGELOG.md](CHANGELOG.md) - Version history and release notes
 
+## Studying App Attest Across iOS Execution Contexts
+
+This project supports research and comparison of App Attest artifacts generated from different iOS execution contexts, including:
+
+- Main application
+- Action extensions
+- UI extensions
+- App SSO extensions
+
+### Important Research Context
+
+**Apple App Attest does NOT define separate attestation formats for extensions.** Extensions share the same App ID prefix and Team ID as the container app. The attestation object structure remains identical across all execution contexts.
+
+This research capability enables studying:
+- **Execution context differences**: Where trust signals originate
+- **RP ID hash consistency**: Whether bundle ID hashing is consistent across contexts
+- **Certificate chain characteristics**: Chain length and structure patterns
+- **Authenticator flags**: Flag patterns across different contexts
+- **Key reuse vs regeneration**: Whether keys are shared or regenerated per context
+
+### Research Architecture
+
+The project provides:
+
+1. **Context Annotation Layer** (`AttestationContext`, `AttestationSample`):
+   - Wraps decoded attestations with execution context metadata
+   - Enables comparison while maintaining research-grade isolation
+   - Context is metadata only; attestation structure is unchanged
+
+2. **Analysis Mode** (CLI `analyze` command):
+   - Compares multiple `AttestationSample` entries
+   - Highlights RP ID hash consistency, certificate chain patterns, and flag differences
+   - Outputs human-readable or JSON analysis results
+
+3. **Research Framing**:
+   - Uses research language: "execution context", "trust envelope", "observed behavior"
+   - Explicitly states: no validation, no security claims, contextual differences only
+   - Focuses on where trust signals originate, not enforcing them
+
+### Usage
+
+```bash
+# Analyze multiple samples across execution contexts
+./AppAttestDecoderCLI analyze --file samples.json
+
+# Output as JSON for programmatic analysis
+./AppAttestDecoderCLI analyze --file samples.json --json
+```
+
+The samples JSON file should contain an array of `AttestationSample` objects with context, bundle ID, team ID, key ID, and base64 attestation data.
+
+**Note**: This is a research tool. It does not validate trust or make security claims. All validation must be implemented separately.
+
 ## Related Work
 
 This decoder is designed to be consumed by separate validator implementations. The architecture separates parsing (this project) from validation (future work), enabling:
