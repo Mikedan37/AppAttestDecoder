@@ -284,12 +284,21 @@ struct ContentView: View {
                 Divider()
                 
                 // Action Extension Test Button
-                Button("Test Action Extension") {
-                    print("[MainApp] Opening share sheet...")
-                    showShareSheet = true
+                HStack {
+                    Button("Test Action Extension") {
+                        print("[MainApp] Opening share sheet...")
+                        showShareSheet = true
+                    }
+                    
+                    Button {
+                        // No copy action needed for this button
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .imageScale(.medium)
+                    }
+                    .disabled(true)
+                    .opacity(0.3)
                 }
-                .buttonStyle(.borderedProminent)
-                .padding(.vertical)
             }
             .padding()
         }
