@@ -1,11 +1,36 @@
 # Troubleshooting Action Extension
 
+## Critical: Extension Target Must Be Created in Xcode
+
+**IMPORTANT**: The extension source code exists, but you MUST create the extension target in Xcode for it to work. The source file alone is not enough.
+
+### Quick Check: Does Extension Target Exist?
+
+1. Open Xcode
+2. Look at the project navigator (left sidebar)
+3. Check if you see an `ActionExtension` target in the target list
+4. If you DON'T see it, the extension target hasn't been created yet
+
+**If the target doesn't exist**: Follow `EXTENSION_SETUP.md` Step 2 to create it.
+
 ## Issue: Extension doesn't appear in Share Sheet
 
-### Check 1: Extension Target is Added
+### Check 1: Extension Target is Added (CRITICAL)
+
+**This is the most common issue**: The extension target doesn't exist in Xcode.
+
 1. Open Xcode project
-2. Check that `ActionExtension` target exists in the target list
-3. Verify it's listed under "Embedded Extensions" in the main app target's build phases
+2. Click on the project name in the navigator (top of left sidebar)
+3. Look at the TARGETS list (middle panel)
+4. **Do you see `ActionExtension` listed?**
+   - **NO**: The target hasn't been created. Go to `EXTENSION_SETUP.md` Step 2.1 and create it.
+   - **YES**: Continue to next check
+
+5. Verify it's listed under "Embedded Extensions" in the main app target's build phases:
+   - Select main app target (`AppAttestDecoderTestApp`)
+   - Go to **Build Phases** tab
+   - Expand **Embed App Extensions**
+   - Verify `ActionExtension.appex` is listed
 
 ### Check 2: Extension is Embedded
 1. Select main app target (`AppAttestDecoderTestApp`)

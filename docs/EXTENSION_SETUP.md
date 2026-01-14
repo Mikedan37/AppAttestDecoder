@@ -31,17 +31,24 @@ This guide explains how to add Action Extension and App SSO Extension targets to
 
 ## Step 2: Add Action Extension Target
 
+**CRITICAL**: This step MUST be done in Xcode. The source file exists, but the target must be created manually.
+
 ### 2.1 Create Target
 
 1. Open `AppAttestDecoderCLI.xcodeproj` in Xcode
-2. Select the project in the navigator
-3. Click **+** button at the bottom of the target list
-4. Select **iOS** → **Action Extension**
-5. Configure:
+2. Click on the **project name** in the navigator (top of left sidebar) - this selects the project, not a file
+3. In the middle panel, you'll see **PROJECT** and **TARGETS** sections
+4. Click the **+** button at the bottom of the **TARGETS** list
+5. Select **iOS** → **Action Extension**
+6. Click **Next**
+7. Configure:
    - **Product Name**: `ActionExtension`
-   - **Bundle Identifier**: `com.example.AppAttestDecoder.ActionExtension` (adjust to match your app)
+   - **Bundle Identifier**: `com.yourteam.AppAttestDecoderTestApp.ActionExtension` (replace `yourteam` with your actual team/identifier)
    - **Language**: Swift
-   - **Embed in Application**: `AppAttestDecoderTestApp`
+   - **Embed in Application**: Select `AppAttestDecoderTestApp` from dropdown
+8. Click **Finish**
+
+**VERIFY**: After creating, you should see `ActionExtension` in the TARGETS list.
 
 ### 2.2 Configure Capabilities
 

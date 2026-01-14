@@ -40,12 +40,17 @@ class ActionExtensionViewController: SLComposeServiceViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        print("[ActionExtension] viewDidLoad called - extension is loading!")
+        print("[ActionExtension] Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")")
+        
         // Check if App Attest is supported
         guard service.isSupported else {
+            print("[ActionExtension] ERROR: App Attest not supported")
             showError("App Attest not supported on this device")
             return
         }
         
+        print("[ActionExtension] App Attest is supported, setting up UI...")
         setupUI()
     }
     
