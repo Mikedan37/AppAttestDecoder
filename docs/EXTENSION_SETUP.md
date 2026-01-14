@@ -6,6 +6,14 @@ This guide explains how to add Action Extension and App SSO Extension targets to
 
 **Goal**: Answer with zero ambiguity: "Can an Action Extension produce a distinct, verifiable App Attest attestation?"
 
+**What we prove**:
+- Different key IDs (main app vs extension)
+- Different bundle IDs
+- Same Apple root
+- Same device class
+
+**Thesis**: "Extensions are separate trust surfaces with hardware-backed identity"
+
 ## Prerequisites
 
 - Xcode 14.0 or later
