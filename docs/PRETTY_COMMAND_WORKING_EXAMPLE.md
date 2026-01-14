@@ -2,7 +2,14 @@
 
 ## ✅ It Works!
 
-The `pretty` command works correctly. Here's proof and how to use it.
+The `pretty` command works correctly. The implementation is solid. The only issue is **command invocation format**.
+
+**Key Rule**: The `pretty` command does NOT accept raw arguments. It requires one of:
+- `--base64 <string>`
+- `--file <path>`
+- STDIN (pipe input)
+
+If you don't provide one of these, it silently exits (by design - strict CLI argument parsing).
 
 ## Correct Usage
 
