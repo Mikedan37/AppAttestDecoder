@@ -1,6 +1,7 @@
 import SwiftUI
 import CryptoKit
 import DeviceCheck
+import UIKit
 
 struct ContentView: View {
     private let service = DCAppAttestService.shared
@@ -18,6 +19,8 @@ struct ContentView: View {
     @State private var lastAssertClientDataHashB64: String?
     @State private var assertionBlobB64: String?
     @State private var assertionError: String?
+    
+    @State private var showShareSheet = false
 
     var body: some View {
         ScrollView {
@@ -277,8 +280,45 @@ struct ContentView: View {
                     Text("Assertion not generated")
                         .foregroundStyle(.secondary)
                 }
+                
+                Divider()
+                
+                // Action Extension Test Button
+                Button("Test Action Extension") {
+                    showShareSheet = true
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.vertical)
             }
             .padding()
         }
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheet(activityItems: ["Test App Attest Extension"])
+        }
+    }
+}
+
+// Helper to present share sheet from SwiftUI
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        
+        // Configure for iPad
+        if let popover = controller.popoverPresentationController {
+            popover.sourceView = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .first?.rootViewController?.view
+            popover.sourceRect = CGRect(x: UIScreen.main.bounds.width / 2, y: UIScreen.main.bounds.height, width: 0, height: 0)
+            popover.permittedArrowDirections = .down
+        }
+        
+        return controller
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
+        // No updates needed
     }
 }
