@@ -71,7 +71,7 @@ class ActionExtensionViewController: SLComposeServiceViewController {
         // Key ID display
         let keyIDLabel = UILabel()
         keyIDLabel.text = "Key ID: Not generated"
-        keyIDLabel.font = .systemFont(ofSize: 12, design: .monospaced)
+        keyIDLabel.font = UIFont.monospacedSystemFont(ofSize: 12, weight: .regular)
         keyIDLabel.textColor = .secondaryLabel
         keyIDLabel.numberOfLines = 2
         keyIDLabel.translatesAutoresizingMaskIntoConstraints = false

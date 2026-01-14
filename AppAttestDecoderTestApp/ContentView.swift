@@ -285,6 +285,7 @@ struct ContentView: View {
                 
                 // Action Extension Test Button
                 Button("Test Action Extension") {
+                    print("[MainApp] Opening share sheet...")
                     showShareSheet = true
                 }
                 .buttonStyle(.borderedProminent)
@@ -303,18 +304,35 @@ struct ShareSheet: UIViewControllerRepresentable {
     let activityItems: [Any]
     
     func makeUIViewController(context: Context) -> UIActivityViewController {
+        print("[ShareSheet] Creating UIActivityViewController with items: \(activityItems.count)")
         let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        
+        // Exclude system activities we don't need (faster loading)
+        controller.excludedActivityTypes = [
+            .assignToContact,
+            .saveToCameraRoll,
+            .addToReadingList,
+            .postToFlickr,
+            .postToVimeo,
+            .postToTencentWeibo,
+            .postToTwitter,
+            .postToFacebook,
+            .openInIBooks,
+            .markupAsPDF
+        ]
         
         // Configure for iPad
         if let popover = controller.popoverPresentationController {
-            popover.sourceView = UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .flatMap { $0.windows }
-                .first?.rootViewController?.view
-            popover.sourceRect = CGRect(x: UIScreen.main.bounds.width / 2, y: UIScreen.main.bounds.height, width: 0, height: 0)
-            popover.permittedArrowDirections = .down
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let rootView = windowScene.windows.first?.rootViewController?.view {
+                popover.sourceView = rootView
+                let screenBounds = windowScene.screen.bounds
+                popover.sourceRect = CGRect(x: screenBounds.width / 2, y: screenBounds.height, width: 0, height: 0)
+                popover.permittedArrowDirections = .down
+            }
         }
         
+        print("[ShareSheet] UIActivityViewController created, presenting...")
         return controller
     }
     
