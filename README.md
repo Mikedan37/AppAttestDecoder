@@ -443,10 +443,15 @@ This project is a decoder only. It does not perform cryptographic validation. Se
 
 - [docs/HOW_TO_USE.md](docs/HOW_TO_USE.md) - Complete CLI usage guide
 - [docs/TEST_APP_GUIDE.md](docs/TEST_APP_GUIDE.md) - Guide for using companion test apps
+- [docs/RESEARCH.md](docs/RESEARCH.md) - Research methodology and observables
 - [docs/SECURITY_VALIDATION.md](docs/SECURITY_VALIDATION.md) - Production validation checklist
 - [docs/QA_FLOW.md](docs/QA_FLOW.md) - Quality assurance procedures
 - [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md) - Complete project audit and status
 - [CHANGELOG.md](CHANGELOG.md) - Version history and release notes
+
+## Research Context
+
+This project is part of an ongoing research effort to understand how Apple App Attest behaves across different execution contexts. The goal is observability, not validation or policy enforcement. For detailed methodology and findings, see [docs/RESEARCH.md](docs/RESEARCH.md).
 
 ## Studying App Attest Across iOS Execution Contexts
 
