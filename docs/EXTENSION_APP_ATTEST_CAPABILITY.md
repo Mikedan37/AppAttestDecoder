@@ -6,6 +6,20 @@ The extension shows "App Attest not supported on this device" even though:
 - App Attest works in the main app
 - The device supports App Attest
 
+## What This Error ACTUALLY Means
+
+**This is NOT a hardware issue.** Apple's error message is misleading.
+
+`DCAppAttestService.shared.isSupported` returns `false` in extensions when:
+
+1. **Extension target missing App Attest capability** (most common)
+2. **Extension signed with wrong team/provisioning profile**
+3. **Provisioning profile doesn't include the entitlement**
+4. **Checking `isSupported` too early** (before extension fully loads)
+5. **Running simulator binary instead of device**
+
+This is **expected platform behavior** - App Attest support is evaluated per execution context, not per device. The fact that main app works but extension doesn't is the signal you're looking for - it proves contextual trust evaluation.
+
 ## The Cause
 
 The **extension target** doesn't have the App Attest capability enabled. Extensions need their own capabilities - they don't inherit from the main app.
@@ -54,8 +68,13 @@ The **extension target** doesn't have the App Attest capability enabled. Extensi
 ### Step 5: Test Again
 
 1. Open extension from share sheet
-2. Check console for: `[ActionExtension] App Attest is supported`
+2. Check console for:
+   - `[ActionExtension] viewDidAppear called`
+   - `[ActionExtension] DCAppAttestService.shared.isSupported = true`
+   - `[ActionExtension] ✅ App Attest is supported, starting flow...`
 3. Extension should now show "Initializing..." instead of error
+
+**Important**: The code now checks `isSupported` in `viewDidAppear` (not `viewDidLoad`) to ensure the extension is fully loaded before checking.
 
 ## Why This Happens
 

@@ -59,26 +59,45 @@ class ActionViewController: SLComposeServiceViewController {
         
         print("[ActionExtension] viewDidLoad called - extension is loading!")
         print("[ActionExtension] Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")")
+        print("[ActionExtension] Team ID: \(Bundle.main.object(forInfoDictionaryKey: "AppIdentifierPrefix") as? String ?? "unknown")")
         
         // Hide default text view
         textView.isHidden = true
         
         // Setup UI first (always show something)
         setupUI()
+        updateStatus("Loading...")
         
-        // Check if App Attest is supported
-        guard service.isSupported else {
+        // DO NOT check isSupported here - too early in lifecycle
+        // Wait for viewDidAppear
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        print("[ActionExtension] viewDidAppear called - extension UI is fully presented")
+        print("[ActionExtension] Checking App Attest support...")
+        
+        // Check if App Attest is supported (safe to check now - UI is presented)
+        let isSupported = service.isSupported
+        print("[ActionExtension] DCAppAttestService.shared.isSupported = \(isSupported)")
+        
+        if !isSupported {
             print("[ActionExtension] ERROR: App Attest not supported")
-            showError("App Attest not supported on this device")
+            print("[ActionExtension] This usually means:")
+            print("[ActionExtension]   1. Extension target missing App Attest capability")
+            print("[ActionExtension]   2. Extension signed with wrong team/profile")
+            print("[ActionExtension]   3. Provisioning profile doesn't include entitlement")
+            showError("App Attest not supported in this context.\n\nCheck:\n1. Extension has App Attest capability\n2. Extension signed with correct team\n3. Clean build and reinstall")
             updateStatus("❌ App Attest not supported")
             return
         }
         
-        print("[ActionExtension] App Attest is supported, will start flow...")
+        print("[ActionExtension] ✅ App Attest is supported, starting flow...")
         updateStatus("Initializing...")
         
-        // Auto-run full flow with a slight delay to ensure UI is ready
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+        // Auto-run full flow with a slight delay to ensure everything is ready
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self = self else { return }
             self.runFullFlow()
         }
@@ -252,6 +271,15 @@ class ActionViewController: SLComposeServiceViewController {
             return
         }
         
+        // Double-check support before starting (defensive)
+        guard service.isSupported else {
+            print("[ActionExtension] ERROR: isSupported became false during flow")
+            showError("App Attest support lost during execution")
+            updateStatus("❌ Support check failed")
+            return
+        }
+        
+        print("[ActionExtension] Starting full App Attest flow...")
         updateStatus("Running full App Attest flow...")
         
         // Step 1: Generate Key
