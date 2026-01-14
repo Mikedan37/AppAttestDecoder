@@ -34,6 +34,8 @@ let optJSON = options.contains("--json")
 let optVerbose = options.contains("--verbose") || options.contains("-v")
 let optNoColor = options.contains("--no-color") || options.contains("--no-colour")
 let optVersion = options.contains("--version") || options.contains("-V")
+let optForensic = options.contains("--forensic")
+let optBoth = options.contains("--both")
 
 // Context annotation flags (for research)
 func getContext(from args: [String]) -> AttestationContext? {
@@ -96,7 +98,11 @@ case "assert":
 case "pretty":
     let b64 = readBase64Input(args: args)
     let colorized = !optNoColor && isTTY()
-    prettyPrintAttestation(base64: b64, verbose: optVerbose, colorized: colorized)
+    if optForensic {
+        forensicPrintAttestation(base64: b64, json: optJSON, raw: optRaw, both: optBoth, colorized: colorized)
+    } else {
+        prettyPrintAttestation(base64: b64, verbose: optVerbose, colorized: colorized)
+    }
 
 case "selftest":
     print("Self-test:")
@@ -251,6 +257,46 @@ func decodeAttestation(_ data: Data) {
 ///   echo "BASE64_BLOB" | ./AppAttestDecoderCLI pretty
 ///   cat attestation.txt | ./AppAttestDecoderCLI pretty
 ///   ./AppAttestDecoderCLI pretty --base64 "BLOB" --no-color  # Disable colors
+func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool, colorized: Bool) {
+    func printError(_ message: String) {
+        let data = (message + "\n").data(using: .utf8)!
+        FileHandle.standardError.write(data)
+    }
+    
+    guard let data = Data(base64Encoded: base64) else {
+        printError("Error: Invalid base64 string")
+        exit(1)
+    }
+    
+    let decoder = AppAttestDecoder(teamID: nil)
+    do {
+        let attestation = try decoder.decodeAttestationObject(data)
+        
+        if json {
+            // JSON output mode (to be implemented)
+            printError("JSON output mode not yet implemented")
+            exit(1)
+        } else {
+            // Human-readable forensic output
+            let mode: ForensicMode
+            if both {
+                mode = .both
+            } else if raw {
+                mode = .raw
+            } else {
+                mode = .decoded
+            }
+            
+            let forensicMode = ForensicMode(showRaw: mode.showRaw, showDecoded: mode.showDecoded, showJSON: false, colorized: colorized)
+            let output = attestation.forensicPrint(mode: forensicMode)
+            print(output)
+        }
+    } catch {
+        printError("Error: \(error)")
+        exit(1)
+    }
+}
+
 func prettyPrintAttestation(base64: String, verbose: Bool = false, colorized: Bool = false) {
     // Helper to print to stderr
     func printError(_ message: String) {
