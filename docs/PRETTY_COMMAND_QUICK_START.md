@@ -44,5 +44,5 @@ A test attestation is available at:
 
 ## Why It "Didn't Work" Before
 
-The command ires explicit input flags. Without `--base64` or `--file`, it silently exits (by design - strict argument parsing). This is actually a **good sign** - it means your CLI is properly structured.
+The command requires explicit input flags. Without `--base64` or `--file`, it silently exits (by design - strict argument parsing). This is actually a **good sign** - it means your CLI is properly structured.
 
