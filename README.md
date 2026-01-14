@@ -451,9 +451,15 @@ This project is a decoder only. It does not perform cryptographic validation. Se
 
 ## Research Context
 
-This project is part of an ongoing research effort to understand how Apple App Attest behaves across different execution contexts. The goal is observability, not validation or policy enforcement. For detailed methodology and findings, see [docs/RESEARCH.md](docs/RESEARCH.md).
+This project provides a research instrument for observing how Apple's App Attest trust model behaves across execution contexts. This is an observational toolchain, not a capability builder. The goal is measurement, not modification. For detailed methodology and findings, see [docs/RESEARCH.md](docs/RESEARCH.md).
 
-**This project includes a research module for studying how App Attest artifacts differ when generated from non-primary execution contexts such as Action Extensions and App SSO flows.** See [docs/EXTENSION_SETUP.md](docs/EXTENSION_SETUP.md) for setup instructions.
+**Research Question**: "How does Apple's trust system behave when the same app family asserts identity from different execution contexts?"
+
+**What we observe**: Where trust signals originate, how they are gated, what stays invariant.
+
+**What we do not do**: Share keys, forge identity, circumvent DeviceCheck, rebind trust.
+
+See [docs/EXTENSION_SETUP.md](docs/EXTENSION_SETUP.md) for setup instructions.
 
 ## Studying App Attest Across iOS Execution Contexts
 

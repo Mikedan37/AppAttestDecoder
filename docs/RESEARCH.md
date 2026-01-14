@@ -2,7 +2,14 @@
 
 ## Abstract
 
-This project annotates Apple App Attest artifacts with execution context metadata (main app, action extensions, App SSO extensions) to enable comparative research. **The artifacts themselves are structurally identical regardless of execution context** - Apple App Attest uses the same attestation format and flow across all contexts. This research focuses on execution context annotation and provenance tracking, not structural differences. The decoder extracts raw materials (certificate chains, authenticator data, signatures) for analysis. No cryptographic validation or trust decisions are performed.
+This project provides a research instrument for observing how Apple's App Attest trust model behaves across execution contexts (main app, action extensions, App SSO extensions). **The artifacts themselves are structurally identical regardless of execution context** - Apple App Attest uses the same attestation format and flow across all contexts. This is an observational toolchain, not a capability builder. The decoder extracts raw materials (certificate chains, authenticator data, signatures) for analysis. No cryptographic validation or trust decisions are performed.
+
+**Research Question**: "How does Apple's trust system behave when the same app family asserts identity from different execution contexts?"
+
+**What we observe**:
+- Where trust signals originate
+- How they are gated
+- What stays invariant across contexts
 
 ## Motivation
 
@@ -78,43 +85,42 @@ Artifacts are decoded using `AppAttestDecoderCLI` and compared using the `analyz
 ## Trust Surface Map
 
 ```
-┌─────────────────┐
-│   Main App      │ ─┐
-│   (Full UI)     │  │
-└─────────────────┘  │
-                     │
-┌─────────────────┐  │
-│ Action Extension│  │
-│ (Share Sheet)   │  ├──> App Attest Artifact ──> Decoder ──> Observables
-└─────────────────┘  │
-                     │
-┌─────────────────┐  │
-│  UI Extension   │  │
-│  (Widget/UI)    │  │
-└─────────────────┘  │
-                     │
-┌─────────────────┐  │
-│ App SSO Ext     │ ─┘
-│ (Auth)          │
-└─────────────────┘
-
-Each execution context:
-- Runs in separate process
-- Has distinct entitlements
-- May generate independent keys
-- Produces structurally identical attestation objects
+User Action
+   │
+   ├── Main App ── Attestation (key A) ─┐
+   │                                     │
+   ├── Action Extension ── Attestation (key B) ──┼──> Backend Decoder
+   │                                             │
+   └── App SSO Extension ── Attestation (key C) ┘
+                                          │
+                                          ▼
+                                   Structural Equivalence
 ```
+
+**Caption**: Each execution context produces structurally identical App Attest artifacts, differentiated only by provenance (execution context, bundle ID, key ID).
+
+**What this shows**:
+- Same trust model across all contexts
+- Same format, same flow
+- Gated by execution context, not structure
+- Provenance is the differentiator, not cryptographic content
 
 ## Observables
 
-**Critical**: Since artifacts are structurally identical across contexts, we observe consistency rather than differences. The following properties are compared to verify structural parity.
+**Critical**: Since artifacts are structurally identical across contexts, we observe consistency rather than differences. This is measurement, not modification.
 
 **Research Questions**:
 - How many distinct App Attest identities are observed across execution contexts?
 - How often does each surface assert?
-- Which surfaces are more active?
-- Do extensions behave differently over time?
+- Which surfaces are more active (user-driven vs system-driven)?
+- Which are bursty vs steady over time?
 - Does key churn differ by context?
+
+**What we measure** (not what we modify):
+- Structural equivalence verification
+- Assertion frequency per context
+- Time-series behavior patterns
+- Provenance tracking
 
 The following properties are compared to verify structural parity:
 
@@ -160,15 +166,35 @@ This research has several important constraints:
 - **Decoder limitations**: The decoder performs structural parsing only; it does not validate certificates, verify signatures, or enforce policy
 - **Sample size is limited**: This is exploratory research focused on context annotation, not a comprehensive study
 
+## Findings
+
+**Structural Equivalence**: No structural divergence was observed across execution contexts. All artifacts are identical in format, size, and cryptographic structure.
+
+**Provenance Differentiation**: Artifacts are differentiated only by execution context metadata (bundle ID, key ID, timestamp), not by structure.
+
+**This is the result**: The observation that artifacts are structurally identical across contexts is not disappointing - it is the finding. This confirms Apple's design: same trust model, same format, gated by execution context.
+
 ## Future Work
 
 Potential extensions of this research:
 
 - **Larger device matrix**: Test across multiple device models and iOS versions
 - **Longitudinal tracking**: Observe behavior changes across iOS version updates
-- **Policy engines**: Build validation and policy engines on top of decoded artifacts
+- **Time-series analysis**: Graph assertions per context over time to understand usage patterns
 - **Assertion analysis**: Extend comparison to assertion objects across contexts
 - **Key lifecycle**: Study key persistence and reuse patterns across app launches
+
+**What this enables** (without crossing boundaries):
+- Better backend attribution
+- Fine-grained fraud heuristics
+- Context-aware trust weighting
+- Debugging App Attest behavior in extensions (which Apple barely documents)
+
+**What this does not do**:
+- Share keys across contexts
+- Forge identity
+- Circumvent DeviceCheck
+- Rebind trust
 
 ## Data Format
 
