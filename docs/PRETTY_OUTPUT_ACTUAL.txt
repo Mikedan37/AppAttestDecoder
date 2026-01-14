@@ -1,0 +1,37 @@
+Attestation Object
+==================
+
+`format`: apple-appattest
+`authenticatorData`: {
+  `rpIdHash`: 30800609 2a864886 f7636408 070481bf 3081bcbf 8a780604 0432362e 31bf8850 (32 bytes)
+  `flags`: {
+    `rawValue`: 0x03 (3)
+    `userPresent`: true
+    `userVerified`: false
+    `attestedCredentialData`: false
+    `extensionsIncluded`: false
+  }
+  `signCount`: 33620671
+  `attestedCredentialData`: nil
+  `extensions`: nil
+  `rawData`: [3990 bytes of hex data]
+}
+`attestationStatement`: {
+  `alg`: nil
+  `signature`: empty
+  `x5c`: {
+    `[0]`: [Certificate: 1042 bytes]
+    `[1]`: [Certificate: 583 bytes]
+  }
+  `rawCBOR`: {
+    map(2 pairs): {
+      `"x5c"`:
+        array(2 elements): [
+          [0]: byteString([1042 bytes])
+          [1]: byteString([583 bytes])
+        ]
+      `"receipt"`:
+        byteString([3990 bytes])
+    }
+  }
+}
