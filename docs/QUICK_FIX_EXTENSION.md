@@ -68,12 +68,25 @@ You're seeing:
 4. **Verify `ActionExtension.appex` is listed**
    - If not, click "+" and add it
 
-### Step 6: Build and Run
+### Step 6: Verify Embedding (CRITICAL)
 
-1. **Select the main app scheme** (`AppAttestDecoderTestApp`) in the scheme selector (top toolbar)
-2. **Connect a physical iOS device** (App Attest doesn't work in simulator)
-3. **Build and Run** (Cmd+R)
-4. **After install, try the "Test Action Extension" button again**
+1. **Select `AppAttestDecoderTestApp` target** (main app)
+2. **Go to "Build Phases" tab**
+3. **Look for "Embed App Extensions" section**
+4. **Verify `ActionExtension.appex` is listed there**
+   - If NOT listed: Click "+" button → Select `ActionExtension` → Click "Add"
+5. **Verify the "Code Sign On Copy" checkbox is checked** for the extension
+
+### Step 7: Clean and Rebuild
+
+1. **Product → Clean Build Folder** (Cmd+Shift+K)
+2. **Delete the app from your device** (long press app icon → Delete)
+3. **Select the main app scheme** (`AppAttestDecoderTestApp`) in the scheme selector (top toolbar)
+4. **Connect a physical iOS device** (App Attest doesn't work in simulator)
+5. **Build and Run** (Cmd+R)
+6. **After install, try the "Test Action Extension" button again**
+
+**IMPORTANT**: You MUST delete the app from the device and reinstall after creating the extension target. iOS caches extension information, and a fresh install is required.
 
 ## Verification
 
