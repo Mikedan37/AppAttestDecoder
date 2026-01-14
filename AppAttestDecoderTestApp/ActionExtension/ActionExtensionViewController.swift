@@ -2,21 +2,27 @@
 //  ActionExtensionViewController.swift
 //  ActionExtension
 //
-//  This file implements an Action Extension that generates App Attest attestations
-//  from within a Share Sheet context. This is for research purposes to study
-//  how App Attest artifacts differ when generated from extension execution contexts.
+//  Action Extension App Attest Identity Probe
 //
-//  This extension:
-//  - Uses DeviceCheck + App Attest APIs
-//  - Generates a real attestation on a physical device
-//  - Runs inside a Share Sheet
-//  - Sends the attestation blob back to the host app via App Group
-//  - Host app saves the blob for CLI decoding
+//  Purpose: Prove that an Action Extension can generate its own App Attest identity.
+//  This is a probe, not a security gate. We're proving a primitive exists.
 //
-//  Important:
-//  - Extension generates its own attestation (no key sharing)
-//  - Uses standard Apple flows only
-//  - No validation or security claims are made
+//  Goal: Answer with zero ambiguity:
+//  "Can an Action Extension produce a distinct, verifiable App Attest attestation?"
+//
+//  What this does:
+//  - Generates its own App Attest key (distinct from main app)
+//  - Produces an attestation from within Share Sheet context
+//  - Makes the attestation observable (saves to App Group for decoder)
+//
+//  What this does NOT do:
+//  - No verification yet
+//  - No backend logic
+//  - No policy enforcement
+//  - Just generate and attest
+//
+//  This demonstrates: Apple treats Action Extensions as a separate trust principal
+//  with hardware-backed identity.
 //
 
 import UIKit

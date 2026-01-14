@@ -2,6 +2,10 @@
 
 This guide explains how to add Action Extension and App SSO Extension targets to the test app for research purposes.
 
+**Purpose**: Prove that extensions can generate their own App Attest identities. This is a probe, not a security gate. We're proving a primitive exists, not building features.
+
+**Goal**: Answer with zero ambiguity: "Can an Action Extension produce a distinct, verifiable App Attest attestation?"
+
 ## Prerequisites
 
 - Xcode 14.0 or later

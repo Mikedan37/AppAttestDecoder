@@ -461,14 +461,21 @@ This project provides a research instrument for observing how Apple's App Attest
 
 See [docs/EXTENSION_SETUP.md](docs/EXTENSION_SETUP.md) for setup instructions.
 
-## Studying App Attest Across iOS Execution Contexts
+## Action Extension App Attest Identity Probe
 
-This project supports annotation and provenance tracking of App Attest artifacts generated from different iOS execution contexts, including:
+**Goal**: Prove that an Action Extension can generate its own App Attest identity.
 
-- Main application
-- Action extensions
-- UI extensions
-- App SSO extensions
+**Question**: "Can an Action Extension produce a distinct, verifiable App Attest attestation?"
+
+**What We Prove**:
+- Different key IDs across contexts (main app vs extension)
+- Different attestation chains
+- Same device, same Apple root
+- Different execution context
+
+**Thesis**: "Apple treats Action Extensions as a separate trust principal with hardware-backed identity."
+
+This is a probe, not a security gate. We're proving a primitive exists, not building features.
 
 ### Important Research Context
 

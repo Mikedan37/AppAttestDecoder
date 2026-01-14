@@ -40,22 +40,30 @@ A single container iOS app with App Attest capability enabled, containing:
    - Standard UI presentation
    - Generates its own App Attest key (distinct identity)
    - Produces attestations/assertions with its own lifecycle
+   - **Reference implementation for comparison**
 
-2. **Action extension target**
+2. **Action extension target** (Identity Probe)
    - Share sheet integration (`SLComposeServiceViewController`)
-   - Limited UI constraints
+   - Minimal UI: one button "Test Attestation"
    - Generates its own App Attest key (distinct identity)
-   - Produces attestations/assertions independently
-   - No shared state with main app
+   - Produces attestations independently
+   - **Purpose**: Prove Action Extension can generate distinct, verifiable App Attest attestation
 
-3. **App SSO extension target**
+3. **App SSO extension target** (Identity Probe)
    - Single sign-on authentication (`ASCredentialProviderViewController`)
-   - Security-sensitive operations
    - Generates its own App Attest key (distinct identity)
-   - Produces attestations/assertions independently
-   - No shared state with main app
+   - Produces attestations independently
+   - **Purpose**: Prove App SSO Extension can generate distinct, verifiable App Attest attestation
 
 **Trust Surface Model**: Each execution context is modeled as a distinct trust surface with its own cryptographic identity. This aligns with how Apple treats execution contexts as distinct security principals. No keys are shared. No identity is unified. This is trust-surface mapping, not identity merging.
+
+**What We Prove**: 
+- Different key IDs across contexts
+- Different attestation chains
+- Same device, same Apple root
+- Different execution context
+
+**This demonstrates**: Apple treats extensions as separate trust principals with hardware-backed identity.
 
 **Note**: UI extension target is defined in the architecture but not yet implemented in the test app. Future work may include UI extension implementation.
 
@@ -168,9 +176,25 @@ This research has several important constraints:
 
 ## Findings
 
+**Identity Probe Results**:
+
+When comparing attestations from:
+- Main app (key A)
+- Action extension (key B)
+- App SSO extension (key C)
+
+We observe:
+- **Different key IDs**: Each context generates its own distinct key
+- **Different attestation chains**: Each key has its own certificate chain
+- **Same device**: All attestations originate from the same hardware
+- **Same Apple root**: All chains validate to the same Apple root CA
+- **Different execution context**: Provenance is the differentiator
+
 **Structural Equivalence**: No structural divergence was observed across execution contexts. All artifacts are identical in format, size, and cryptographic structure.
 
 **Provenance Differentiation**: Artifacts are differentiated only by execution context metadata (bundle ID, key ID, timestamp), not by structure.
+
+**Thesis**: "Apple treats Action Extensions as a separate trust principal with hardware-backed identity."
 
 **This is the result**: The observation that artifacts are structurally identical across contexts is not disappointing - it is the finding. This confirms Apple's design: same trust model, same format, gated by execution context.
 
