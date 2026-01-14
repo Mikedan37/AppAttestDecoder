@@ -48,6 +48,10 @@ A minimal CLI tool (`AppAttestDecoderCLI`) that provides:
 
 - Decoding of attestation objects from base64 input
 - Decoding of assertion objects
+- Pretty-printing with hierarchical formatting
+- Research annotation and comparison across execution contexts
+
+**Running the CLI**: The CLI is built as an Xcode target. Run it from Xcode (Edit Scheme → Arguments) or see [docs/PRETTY_COMMAND_QUICK_START.md](docs/PRETTY_COMMAND_QUICK_START.md) for usage examples.
 - Multiple input methods (STDIN, file, command-line argument)
 - Output formats (hex dump, raw base64, JSON)
 
