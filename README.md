@@ -457,7 +457,7 @@ This project is part of an ongoing research effort to understand how Apple App A
 
 ## Studying App Attest Across iOS Execution Contexts
 
-This project supports research and comparison of App Attest artifacts generated from different iOS execution contexts, including:
+This project supports annotation and provenance tracking of App Attest artifacts generated from different iOS execution contexts, including:
 
 - Main application
 - Action extensions
@@ -466,14 +466,15 @@ This project supports research and comparison of App Attest artifacts generated 
 
 ### Important Research Context
 
-**Apple App Attest does NOT define separate attestation formats for extensions.** Extensions share the same App ID prefix and Team ID as the container app. The attestation object structure remains identical across all execution contexts.
+**Apple App Attest uses the exact same attestation format and flow regardless of execution context.** Extensions share the same App ID prefix and Team ID as the container app. The attestation object structure is identical across all contexts - it's just gated differently.
 
-This research capability enables studying:
-- **Execution context differences**: Where trust signals originate
-- **RP ID hash consistency**: Whether bundle ID hashing is consistent across contexts
-- **Certificate chain characteristics**: Chain length and structure patterns
-- **Authenticator flags**: Flag patterns across different contexts
-- **Key reuse vs regeneration**: Whether keys are shared or regenerated per context
+This research capability enables:
+- **Execution context annotation**: Tracking where artifacts originate (context metadata)
+- **Provenance tracking**: Associating artifacts with their generation context
+- **Structural verification**: Confirming artifacts are structurally identical across contexts
+- **Comparative analysis**: Studying consistency rather than differences
+
+**Note**: This is about context annotation and provenance, not finding structural differences. The artifacts themselves are identical.
 
 ### Research Architecture
 

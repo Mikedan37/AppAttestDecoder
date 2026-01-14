@@ -2,7 +2,7 @@
 
 ## Abstract
 
-This project studies the structural properties of Apple App Attest artifacts when generated from different execution contexts (main app, action extensions, App SSO extensions). We decode and compare attestation objects without performing validation to understand how trust signals vary across runtime environments. The decoder extracts raw materials (certificate chains, authenticator data, signatures) for analysis. No cryptographic validation or trust decisions are performed. This research enables first-of-its-kind comparative analysis of App Attest behavior across iOS execution surfaces.
+This project annotates Apple App Attest artifacts with execution context metadata (main app, action extensions, App SSO extensions) to enable comparative research. **The artifacts themselves are structurally identical regardless of execution context** - Apple App Attest uses the same attestation format and flow across all contexts. This research focuses on execution context annotation and provenance tracking, not structural differences. The decoder extracts raw materials (certificate chains, authenticator data, signatures) for analysis. No cryptographic validation or trust decisions are performed.
 
 ## Motivation
 
@@ -10,10 +10,10 @@ iOS app extensions operate under different constraints than the main application
 
 - Extensions run in separate processes with distinct entitlements
 - They often perform security-sensitive operations (authentication, data access)
-- Trust behavior across execution contexts is poorly documented
+- Execution context provenance is not embedded in App Attest artifacts
 - Existing tooling treats App Attest as context-agnostic
 
-This research identifies a blind spot: how do App Attest artifacts differ when generated from different execution contexts, and what does this reveal about Apple's trust surface architecture?
+**Important**: App Attest artifacts are structurally identical regardless of execution context. Apple uses the same attestation format and cryptographic flow whether generated from the main app or an extension. This research focuses on **annotating artifacts with execution context metadata** to enable provenance tracking and comparative analysis, not on finding structural differences.
 
 ## Methodology
 
@@ -67,7 +67,9 @@ Artifacts are decoded using `AppAttestDecoderCLI` and compared using the `analyz
 ./AppAttestDecoderCLI analyze --file samples.json
 ```
 
-**Critical**: No cryptographic validation or trust decisions are performed. This is structural analysis only.
+**Critical**: 
+- No cryptographic validation or trust decisions are performed. This is structural analysis only.
+- The analysis verifies structural consistency across contexts, not differences. Artifacts are identical regardless of execution context.
 
 ## Trust Surface Map
 
@@ -101,7 +103,7 @@ Each execution context:
 
 ## Observables
 
-The following properties are compared across execution contexts:
+**Critical**: Since artifacts are structurally identical across contexts, we observe consistency rather than differences. The following properties are compared to verify structural parity:
 
 ### Authenticator Data
 
@@ -138,12 +140,12 @@ The following properties are compared across execution contexts:
 
 This research has several important constraints:
 
+- **Artifacts are structurally identical**: App Attest uses the same format and flow regardless of execution context. This research annotates context, it does not find structural differences.
+- **Context metadata is external**: Execution context is annotated by the artifact source, not extracted from the attestation itself. The attestation object does not encode execution context.
 - **Apple internal behavior is undocumented**: We observe structure only; Apple's internal trust logic is not documented
-- **Results may vary by OS version**: Different iOS versions may exhibit different behavior
-- **Sample size is limited**: This is exploratory research, not a comprehensive study
 - **No claims about security strength**: We make no assertions about cryptographic guarantees or security properties
 - **Decoder limitations**: The decoder performs structural parsing only; it does not validate certificates, verify signatures, or enforce policy
-- **Context metadata is external**: Execution context is annotated by the artifact source, not extracted from the attestation itself
+- **Sample size is limited**: This is exploratory research focused on context annotation, not a comprehensive study
 
 ## Future Work
 
