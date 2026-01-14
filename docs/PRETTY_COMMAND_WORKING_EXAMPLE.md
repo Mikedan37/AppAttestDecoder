@@ -87,11 +87,26 @@ The command works because:
 
 ## Common Mistakes (Fixed)
 
-❌ **Wrong**: `./AppAttestDecoderCLI pretty NG"`
+❌ **Wrong**: `./AppAttestDecoderCLI pretty "BASE64_STRING"`  
+   → This silently exits because no `--base64` or `--file` flag is provided
+
 ✅ **Right**: `./AppAttestDecoderCLI pretty --base64 "BASE64_STRING"`
 
-❌ **Wrong**: Running binary directly from `.build/` folder
-✅ **Right**: Run from Xcode scheme or with proper rpath
+✅ **Also Right**: `cat attestation.txt | ./AppAttestDecoderCLI pretty`  
+   → This is the cleanest Unix-style approach
+
+❌ **Wrong**: Running binary directly from `.build/` folder (framework linking issue)  
+✅ **Right**: Run from Xcode scheme (handles framework rpath automatically)
+
+## Why This Is Actually Good
+
+Strict argument parsing means:
+- ✅ Your CLI is structured correctly
+- ✅ No "magic" commands that guess what you meant
+- ✅ Clear, predictable behavior
+- ✅ Professional tool design
+
+This is exactly how serious developer tools behave.
 
 ## Next Steps
 
