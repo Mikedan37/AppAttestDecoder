@@ -212,11 +212,8 @@ extension AttestationObject {
         
         // Certificate Chain (x5c)
         output += formatField("x5c", value: "", indent: indent, isContainer: true, colorized: colorized)
-        for (index, cert) in attStmt.x5c.enumerated() {
-            let certIndent = indent + 2
-            let certValue = formatHexData(cert) + " (\(cert.count) bytes)"
-            let certFormatted = colorized ? formatValue(certValue, type: .hex, colorized: colorized) : certValue
-            output += formatField("[\(index)]", value: certFormatted, indent: certIndent, colorized: colorized)
+        for (index, certDER) in attStmt.x5c.enumerated() {
+            output += prettyPrintCertificate(certDER: certDER, index: index, totalCerts: attStmt.x5c.count, indent: indent + 2, colorized: colorized)
         }
         let x5cIndentStr = String(repeating: " ", count: indent)
         let x5cCloseBrace = colorized ? "\(ANSIColor.separator)}\(ANSIColor.reset)" : "}"
@@ -313,6 +310,153 @@ extension AttestationObject {
         case .undefined:
             let undefValue = colorized ? formatValue("undefined", type: .nullValue, colorized: colorized) : "undefined"
             output += "\(indentStr)\(undefValue)\n"
+        }
+        
+        return output
+    }
+    
+    private func prettyPrintCertificate(certDER: Data, index: Int, totalCerts: Int, indent: Int, colorized: Bool = false) -> String {
+        var output = ""
+        let indentStr = String(repeating: " ", count: indent)
+        
+        // Try to parse the certificate
+        if let cert = try? X509Certificate.parse(der: certDER) {
+            // Certificate parsed successfully - show decoded info
+            let role = index == 0 ? " (leaf)" : index == totalCerts - 1 ? " (root)" : " (intermediate)"
+            let certHeader = colorized ? 
+                "\(ANSIColor.fieldName)`[\(index)]`\(ANSIColor.reset): Certificate\(role) [\(certDER.count) bytes]" :
+                "`[\(index)]`: Certificate\(role) [\(certDER.count) bytes]"
+            output += "\(indentStr)\(certHeader)\n"
+            
+            // Subject
+            let subjectValue = cert.subject.attributes.first(where: { $0.oid == "2.5.4.3" })?.value ?? cert.subject.description
+            let subjectFormatted = colorized ? formatValue(subjectValue, type: .string, colorized: colorized) : subjectValue
+            output += "\(indentStr)  \(colorized ? "\(ANSIColor.fieldName)`Subject`\(ANSIColor.reset)" : "`Subject`"): \(subjectFormatted)\n"
+            
+            // Issuer
+            let issuerValue = cert.issuer.attributes.first(where: { $0.oid == "2.5.4.3" })?.value ?? cert.issuer.description
+            let issuerFormatted = colorized ? formatValue(issuerValue, type: .string, colorized: colorized) : issuerValue
+            output += "\(indentStr)  \(colorized ? "\(ANSIColor.fieldName)`Issuer`\(ANSIColor.reset)" : "`Issuer`"): \(issuerFormatted)\n"
+            
+            // Extensions (decoded)
+            let decodedExts = cert.decodedExtensions
+            if !decodedExts.isEmpty {
+                let extHeader = colorized ? 
+                    "\(ANSIColor.fieldName)`extensions`\(ANSIColor.reset): \(ANSIColor.separator){\(ANSIColor.reset)" :
+                    "`extensions`: {"
+                output += "\(indentStr)  \(extHeader)\n"
+                
+                for (oid, ext) in decodedExts.sorted(by: { $0.key < $1.key }) {
+                    output += prettyPrintExtension(oid: oid, ext: ext, indent: indent + 4, colorized: colorized)
+                }
+                
+                let extClose = colorized ? "\(ANSIColor.separator)}\(ANSIColor.reset)" : "}"
+                output += "\(indentStr)  \(extClose)\n"
+            }
+        } else {
+            // Failed to parse - show raw bytes
+            let certValue = formatHexData(certDER.prefix(32)) + "... (\(certDER.count) bytes)"
+            let certFormatted = colorized ? formatValue(certValue, type: .hex, colorized: colorized) : certValue
+            output += formatField("[\(index)]", value: certFormatted, indent: indent, colorized: colorized)
+        }
+        
+        return output
+    }
+    
+    private func prettyPrintExtension(oid: String, ext: X509Extension, indent: Int, colorized: Bool = false) -> String {
+        var output = ""
+        let indentStr = String(repeating: " ", count: indent)
+        let name = X509OID.name(for: oid)
+        let nameFormatted = colorized ? "\(ANSIColor.fieldName)`\(name)`\(ANSIColor.reset)" : "`\(name)`"
+        
+        switch ext {
+        case .basicConstraints(let isCA, let pathLength):
+            let value = "isCA: \(isCA)" + (pathLength.map { ", pathLength: \($0)" } ?? "")
+            let valueFormatted = colorized ? formatValue(value, type: .plain, colorized: colorized) : value
+            output += "\(indentStr)\(nameFormatted): \(valueFormatted)\n"
+            
+        case .keyUsage(let usages):
+            let usageNames = usages.map { $0.name }.joined(separator: ", ")
+            let valueFormatted = colorized ? formatValue(usageNames, type: .plain, colorized: colorized) : usageNames
+            output += "\(indentStr)\(nameFormatted): \(valueFormatted)\n"
+            
+        case .extendedKeyUsage(let usages):
+            let usageNames = usages.map { $0.name }.joined(separator: ", ")
+            let valueFormatted = colorized ? formatValue(usageNames, type: .plain, colorized: colorized) : usageNames
+            output += "\(indentStr)\(nameFormatted): \(valueFormatted)\n"
+            
+        case .appleOID(_, let appleExt):
+            output += "\(indentStr)\(nameFormatted): \(ANSIColor.separator){\(ANSIColor.reset)\n"
+            output += prettyPrintAppleExtension(appleExt, indent: indent + 2, colorized: colorized)
+            let extClose = colorized ? "\(ANSIColor.separator)}\(ANSIColor.reset)" : "}"
+            output += "\(indentStr)\(extClose)\n"
+            
+        case .unknown(_, let raw):
+            let hexValue = formatHexData(raw.prefix(16)) + (raw.count > 16 ? "..." : "") + " (\(raw.count) bytes)"
+            let valueFormatted = colorized ? formatValue(hexValue, type: .hex, colorized: colorized) : hexValue
+            output += "\(indentStr)\(nameFormatted): \(valueFormatted) [raw]\n"
+        }
+        
+        return output
+    }
+    
+    private func prettyPrintAppleExtension(_ appleExt: AppleAppAttestExtension, indent: Int, colorized: Bool = false) -> String {
+        var output = ""
+        let indentStr = String(repeating: " ", count: indent)
+        
+        switch appleExt.type {
+        case .challenge(let hash):
+            let hashValue = formatHexData(hash) + " (\(hash.count) bytes)"
+            let hashFormatted = colorized ? formatValue(hashValue, type: .hex, colorized: colorized) : hashValue
+            output += "\(indentStr)\(colorized ? "\(ANSIColor.fieldName)`challenge`\(ANSIColor.reset)" : "`challenge`"): \(hashFormatted)\n"
+            
+        case .receipt(let receipt):
+            output += "\(indentStr)\(colorized ? "\(ANSIColor.fieldName)`receipt`\(ANSIColor.reset)" : "`receipt`"): \(ANSIColor.separator){\(ANSIColor.reset)\n"
+            if let bundleID = receipt.bundleID {
+                let valueFormatted = colorized ? formatValue(bundleID, type: .string, colorized: colorized) : bundleID
+                output += "\(indentStr)  \(colorized ? "\(ANSIColor.fieldName)`bundleID`\(ANSIColor.reset)" : "`bundleID`"): \(valueFormatted)\n"
+            }
+            if let teamID = receipt.teamID {
+                let valueFormatted = colorized ? formatValue(teamID, type: .string, colorized: colorized) : teamID
+                output += "\(indentStr)  \(colorized ? "\(ANSIColor.fieldName)`teamID`\(ANSIColor.reset)" : "`teamID`"): \(valueFormatted)\n"
+            }
+            if let appVersion = receipt.appVersion {
+                let valueFormatted = colorized ? formatValue(appVersion, type: .string, colorized: colorized) : appVersion
+                output += "\(indentStr)  \(colorized ? "\(ANSIColor.fieldName)`appVersion`\(ANSIColor.reset)" : "`appVersion`"): \(valueFormatted)\n"
+            }
+            if let creationDate = receipt.receiptCreationDate {
+                let dateStr = ISO8601DateFormatter().string(from: creationDate)
+                let valueFormatted = colorized ? formatValue(dateStr, type: .string, colorized: colorized) : dateStr
+                output += "\(indentStr)  \(colorized ? "\(ANSIColor.fieldName)`receiptCreationDate`\(ANSIColor.reset)" : "`receiptCreationDate`"): \(valueFormatted)\n"
+            }
+            if let expirationDate = receipt.receiptExpirationDate {
+                let dateStr = ISO8601DateFormatter().string(from: expirationDate)
+                let valueFormatted = colorized ? formatValue(dateStr, type: .string, colorized: colorized) : dateStr
+                output += "\(indentStr)  \(colorized ? "\(ANSIColor.fieldName)`receiptExpirationDate`\(ANSIColor.reset)" : "`receiptExpirationDate`"): \(valueFormatted)\n"
+            }
+            let extClose = colorized ? "\(ANSIColor.separator)}\(ANSIColor.reset)" : "}"
+            output += "\(indentStr)\(extClose)\n"
+            
+        case .keyPurpose(let purpose):
+            let valueFormatted = colorized ? formatValue(purpose, type: .string, colorized: colorized) : purpose
+            output += "\(indentStr)\(colorized ? "\(ANSIColor.fieldName)`keyPurpose`\(ANSIColor.reset)" : "`keyPurpose`"): \(valueFormatted)\n"
+            
+        case .environment(let env):
+            let valueFormatted = colorized ? formatValue(env, type: .string, colorized: colorized) : env
+            output += "\(indentStr)\(colorized ? "\(ANSIColor.fieldName)`environment`\(ANSIColor.reset)" : "`environment`"): \(valueFormatted)\n"
+            
+        case .osVersion(let version):
+            let valueFormatted = colorized ? formatValue(version, type: .string, colorized: colorized) : version
+            output += "\(indentStr)\(colorized ? "\(ANSIColor.fieldName)`osVersion`\(ANSIColor.reset)" : "`osVersion`"): \(valueFormatted)\n"
+            
+        case .deviceClass(let deviceClass):
+            let valueFormatted = colorized ? formatValue(deviceClass, type: .string, colorized: colorized) : deviceClass
+            output += "\(indentStr)\(colorized ? "\(ANSIColor.fieldName)`deviceClass`\(ANSIColor.reset)" : "`deviceClass`"): \(valueFormatted)\n"
+            
+        case .unknown(_, let raw):
+            let hexValue = formatHexData(raw.prefix(16)) + (raw.count > 16 ? "..." : "") + " (\(raw.count) bytes)"
+            let valueFormatted = colorized ? formatValue(hexValue, type: .hex, colorized: colorized) : hexValue
+            output += "\(indentStr)\(colorized ? "\(ANSIColor.fieldName)`raw`\(ANSIColor.reset)" : "`raw`"): \(valueFormatted)\n"
         }
         
         return output

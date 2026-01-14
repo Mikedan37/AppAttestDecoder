@@ -209,6 +209,15 @@ public struct X509Certificate: Equatable {
 
     /// Best-effort extraction of extensions by OID (raw DER of extnValue OCTET STRING contents).
     public let extensions: [String: Data]
+    
+    /// Decoded extensions (human-readable)
+    public var decodedExtensions: [String: X509Extension] {
+        var decoded: [String: X509Extension] = [:]
+        for (oid, rawValue) in extensions {
+            decoded[oid] = X509Extension.decode(oid: oid, rawValue: rawValue)
+        }
+        return decoded
+    }
 
     public init(
         serialNumber: Data,
