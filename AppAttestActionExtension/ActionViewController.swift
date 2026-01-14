@@ -63,18 +63,23 @@ class ActionViewController: SLComposeServiceViewController {
         // Hide default text view
         textView.isHidden = true
         
+        // Setup UI first (always show something)
+        setupUI()
+        
         // Check if App Attest is supported
         guard service.isSupported else {
             print("[ActionExtension] ERROR: App Attest not supported")
             showError("App Attest not supported on this device")
+            updateStatus("❌ App Attest not supported")
             return
         }
         
-        print("[ActionExtension] App Attest is supported, setting up UI...")
-        setupUI()
+        print("[ActionExtension] App Attest is supported, will start flow...")
+        updateStatus("Initializing...")
         
-        // Auto-run full flow
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        // Auto-run full flow with a slight delay to ensure UI is ready
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self = self else { return }
             self.runFullFlow()
         }
     }
@@ -239,21 +244,34 @@ class ActionViewController: SLComposeServiceViewController {
     }
     
     private func runFullFlow() {
+        // Ensure we're on main thread
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.runFullFlow()
+            }
+            return
+        }
+        
         updateStatus("Running full App Attest flow...")
         
         // Step 1: Generate Key
         updateStatus("Step 1: Generating key...")
+        
         service.generateKey { [weak self] keyID, error in
             guard let self = self else { return }
             
             DispatchQueue.main.async {
                 if let error = error {
+                    print("[ActionExtension] GenerateKey error: \(error)")
                     self.showError("Failed to generate key: \(error.localizedDescription)")
+                    self.updateStatus("❌ Key generation failed")
                     return
                 }
                 
                 guard let keyID = keyID else {
+                    print("[ActionExtension] GenerateKey returned nil")
                     self.showError("Key generation returned nil")
+                    self.updateStatus("❌ Key generation returned nil")
                     return
                 }
                 
@@ -273,12 +291,16 @@ class ActionViewController: SLComposeServiceViewController {
                     
                     DispatchQueue.main.async {
                         if let error = error {
+                            print("[ActionExtension] AttestKey error: \(error)")
                             self.showError("Failed to attest key: \(error.localizedDescription)")
+                            self.updateStatus("❌ Attestation failed")
                             return
                         }
                         
                         guard let attestBlob = attestBlob else {
+                            print("[ActionExtension] AttestKey returned nil")
                             self.showError("Attestation returned nil")
+                            self.updateStatus("❌ Attestation returned nil")
                             return
                         }
                         
@@ -298,12 +320,16 @@ class ActionViewController: SLComposeServiceViewController {
                             
                             DispatchQueue.main.async {
                                 if let error = error {
+                                    print("[ActionExtension] GenerateAssertion error: \(error)")
                                     self.showError("Failed to generate assertion: \(error.localizedDescription)")
+                                    self.updateStatus("❌ Assertion failed")
                                     return
                                 }
                                 
                                 guard let assertionObject = assertionObject else {
+                                    print("[ActionExtension] GenerateAssertion returned nil")
                                     self.showError("Assertion returned nil")
+                                    self.updateStatus("❌ Assertion returned nil")
                                     return
                                 }
                                 

@@ -106,3 +106,54 @@ If extension is NOT in Settings → Extensions, go back to Step 3 (embedding).
 2. Try sharing different content types (text, URLs, images)
 3. Restart device (sometimes iOS needs a reboot to refresh extension registry)
 
+
+## Extension Crashes on Load
+
+If you see errors like:
+- "Failed to locate container app bundle record"
+- "Connection to plugin interrupted"
+- "Scene creation failed"
+
+### Fix 1: Verify Extension is Embedded (MOST COMMON)
+
+1. Select `AppAttestDecoderTestApp` target (main app)
+2. Go to **Build Phases** tab
+3. Scroll to **"Embed App Extensions"** section
+4. **VERIFY**: `AppAttestActionExtension.appex` is listed
+   - If NOT listed:
+     - Click **"+"** button
+     - Select `AppAttestActionExtension`
+     - Click **"Add"**
+   - **VERIFY**: "Code Sign On Copy" checkbox is checked
+
+### Fix 2: Delete App and Reinstall
+
+1. **Delete app from device** (long press → Remove App → Delete App)
+2. **Clean build folder** (Product → Clean Build Folder, Cmd+Shift+K)
+3. **Rebuild and reinstall** on device
+
+### Fix 3: Check Extension Target Build
+
+1. In Xcode, select `AppAttestActionExtension` scheme
+2. Build )
+3. **VERIFY**: Build succeeds without errors
+4. Switch back to main app scheme
+5. Build and run main app
+
+### Fix 4: Verify Info.plist
+
+1. Select `AppAttestActionExtension` target
+2. Go to **Info** tab
+3. Under **NSExtension**:
+   - `NSExtensionPointIdentifier` = `com.apple.ui-services`
+   - `NSExtensionPrincipalClass` = `$(PRODUCT_MODULE_NAME).ActionViewController`
+   - `NSExtensionActivationRule` → `NSExtensionActivationSupportsText` = `true` (Boolean)
+
+### Fix 5: Check Console for Extension Logs
+
+1. In Xcode: View → Debug Area → Activate Console (Cmd+Shift+Y)
+2. Run app and open extension
+3. Look for: `[ActionExtension] viewDidLoad called`
+   - If you see this, extension IS loading (check for errors after)
+   - If you DON'T see this, extension isn't loading (check embedding)
+
