@@ -31,22 +31,24 @@ A single container iOS app with App Attest capability enabled, containing:
 1. **Main application target**
    - Full app lifecycle
    - Standard UI presentation
-   - App Attest key generation and attestation
-   - Reference implementation for comparison
+   - Generates its own App Attest key (distinct identity)
+   - Produces attestations/assertions with its own lifecycle
 
 2. **Action extension target**
    - Share sheet integration (`SLComposeServiceViewController`)
    - Limited UI constraints
-   - Independent App Attest key generation
-   - Generates attestation from within Share Sheet context
-   - Saves artifacts to App Group container for analysis
+   - Generates its own App Attest key (distinct identity)
+   - Produces attestations/assertions independently
+   - No shared state with main app
 
 3. **App SSO extension target**
    - Single sign-on authentication (`ASCredentialProviderViewController`)
    - Security-sensitive operations
-   - Demonstrates trust delegation (uses assertions from main app)
-   - Identity-adjacent trust surfaces
-   - Non-primary execution context signaling
+   - Generates its own App Attest key (distinct identity)
+   - Produces attestations/assertions independently
+   - No shared state with main app
+
+**Trust Surface Model**: Each execution context is modeled as a distinct trust surface with its own cryptographic identity. This aligns with how Apple treats execution contexts as distinct security principals. No keys are shared. No identity is unified. This is trust-surface mapping, not identity merging.
 
 **Note**: UI extension target is defined in the architecture but not yet implemented in the test app. Future work may include UI extension implementation.
 
@@ -54,10 +56,12 @@ A single container iOS app with App Attest capability enabled, containing:
 
 Each target independently performs:
 
-1. `DCAppAttestService.generateKey()` - Creates a new App Attest key
+1. `DCAppAttestService.generateKey()` - Creates a new App Attest key (per-target identity)
 2. `DCAppAttestService.attestKey(_:clientDataHash:)` - Generates attestation object
 3. Artifacts are exported as base64-encoded strings
 4. Context metadata is annotated (execution context, bundle ID, team ID, key ID, timestamp)
+
+**Identity Model**: Each target maintains its own App Attest key lifecycle. Keys are not shared across targets. The backend stores `(teamId, bundleId, keyId, executionContext)` tuples. No shared state. No ambiguity.
 
 ### Analysis
 
@@ -103,7 +107,16 @@ Each execution context:
 
 ## Observables
 
-**Critical**: Since artifacts are structurally identical across contexts, we observe consistency rather than differences. The following properties are compared to verify structural parity:
+**Critical**: Since artifacts are structurally identical across contexts, we observe consistency rather than differences. The following properties are compared to verify structural parity.
+
+**Research Questions**:
+- How many distinct App Attest identities are observed across execution contexts?
+- How often does each surface assert?
+- Which surfaces are more active?
+- Do extensions behave differently over time?
+- Does key churn differ by context?
+
+The following properties are compared to verify structural parity:
 
 ### Authenticator Data
 

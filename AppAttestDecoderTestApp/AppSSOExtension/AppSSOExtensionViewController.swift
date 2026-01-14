@@ -44,64 +44,56 @@ class AppSSOExtensionViewController: ASCredentialProviderViewController {
     }
     
     private func requestAssertionFromMainApp() {
-        // In a real implementation, this would:
-        // 1. Communicate with the main app via App Group or XPC
-        // 2. Request the main app to generate an assertion
-        // 3. Receive the assertion blob
-        // 4. Use it in the SSO flow
+        // This extension generates its own App Attest key (distinct identity).
+        // We model each execution context as a distinct trust surface.
+        // No keys are shared. No identity is unified.
         
-        // For research purposes, we'll simulate this by:
-        // 1. Checking if we have a stored key ID from the main app
-        // 2. Generating an assertion using that key ID
-        // 3. Saving the assertion for analysis
-        
-        // Note: In practice, the main app would have already generated a key
-        // and we would retrieve the key ID from shared storage
-        guard let keyID = retrieveKeyIDFromMainApp() else {
-            showError("No key ID available from main app")
-            return
-        }
-        
-        generateAssertion(keyID: keyID)
-    }
-    
-    private func retrieveKeyIDFromMainApp() -> String? {
-        // Retrieve key ID from App Group container
-        // In a real implementation, this would be stored by the main app
-        guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.example.AppAttestDecoder") else {
-            return nil
-        }
-        
-        let keyIDFile = containerURL.appendingPathComponent("mainAppKeyID.txt")
-        return try? String(contentsOf: keyIDFile, encoding: .utf8)
-    }
-    
-    private func generateAssertion(keyID: String) {
-        let challenge = UUID().uuidString.data(using: .utf8)!
-        let clientDataHash = Data(SHA256.hash(data: challenge))
-        
-        service.generateAssertion(keyID, clientDataHash: clientDataHash) { [weak self] assertionObject, error in
+        // Generate our own key for this extension context
+        service.generateKey { [weak self] keyID, error in
             guard let self = self else { return }
             
             if let error = error {
                 DispatchQueue.main.async {
-                    self.showError("Failed to generate assertion: \(error.localizedDescription)")
+                    self.showError("Failed to generate key: \(error.localizedDescription)")
                 }
                 return
             }
             
-            guard let assertionObject = assertionObject else {
+            guard let keyID = keyID else {
                 DispatchQueue.main.async {
-                    self.showError("Assertion generation returned nil")
+                    self.showError("Key generation returned nil")
                 }
                 return
             }
             
-            self.assertionBlob = assertionObject
-            print("[AppSSOExtension] Generated assertion: \(assertionObject.count) bytes")
+            // Generate attestation for this extension's key
+            self.generateAttestation(keyID: keyID)
+        }
+    }
+    
+    private func generateAttestation(keyID: String) {
+        let challenge = UUID().uuidString.data(using: .utf8)!
+        let clientDataHash = Data(SHA256.hash(data: challenge))
+        
+        service.attestKey(keyID, clientDataHash: clientDataHash) { [weak self] attestBlob, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                DispatchQueue.main.async {
+                    self.showError("Failed to attest key: \(error.localizedDescription)")
+                }
+                return
+            }
+            
+            guard let attestBlob = attestBlob else {
+                DispatchQueue.main.async {
+                    self.showError("Attestation returned nil")
+                }
+                return
+            }
             
             // Save to App Group for analysis
-            self.saveToAppGroup(keyID: keyID, assertion: assertionObject, clientDataHash: clientDataHash)
+            self.saveToAppGroup(keyID: keyID, attestation: attestBlob, clientDataHash: clientDataHash)
             
             DispatchQueue.main.async {
                 self.showSuccess()
@@ -109,14 +101,15 @@ class AppSSOExtensionViewController: ASCredentialProviderViewController {
         }
     }
     
-    private func saveToAppGroup(keyID: String, assertion: Data, clientDataHash: Data) {
+    
+    private func saveToAppGroup(keyID: String, attestation: Data, clientDataHash: Data) {
         // Save to shared App Group container
         guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.example.AppAttestDecoder") else {
             print("[AppSSOExtension] Failed to get App Group container")
             return
         }
         
-        let samplesDir = containerURL.appendingPathComponent("AssertionSamples", isDirectory: true)
+        let samplesDir = containerURL.appendingPathComponent("AttestationSamples", isDirectory: true)
         
         // Create directory if needed
         try? FileManager.default.createDirectory(at: samplesDir, withIntermediateDirectories: true)
@@ -126,13 +119,13 @@ class AppSSOExtensionViewController: ASCredentialProviderViewController {
         let filename = "app-sso-extension-\(timestamp).json"
         let fileURL = samplesDir.appendingPathComponent(filename)
         
-        // Create sample JSON (note: assertions don't use AttestationSample, but we'll store metadata)
+        // Create AttestationSample JSON
         let sample: [String: Any] = [
             "context": "sso",
             "bundleID": Bundle.main.bundleIdentifier ?? "unknown",
             "teamID": "YOUR_TEAM_ID", // Replace with actual Team ID
             "keyID": keyID,
-            "assertionObjectBase64": assertion.base64EncodedString(),
+            "attestationObjectBase64": attestation.base64EncodedString(),
             "timestamp": timestamp
         ]
         

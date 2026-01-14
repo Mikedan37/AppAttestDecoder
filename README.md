@@ -478,11 +478,18 @@ This research capability enables:
 
 ### Research Architecture
 
+The project models each execution context as a distinct trust surface with its own cryptographic identity. This aligns with how Apple treats execution contexts as distinct security principals.
+
+**Trust Surface Model**:
+- Each target (main app, action extension, App SSO extension) generates its own App Attest key
+- Each target produces its own attestations/assertions independently
+- No keys are shared. No identity is unified. This is trust-surface mapping, not identity merging.
+
 The project provides:
 
 1. **Context Annotation Layer** (`AttestationContext`, `AttestationSample`):
    - Wraps decoded attestations with execution context metadata
-   - Enables comparison while maintaining research-grade isolation
+   - Enables provenance tracking while maintaining research-grade isolation
    - Context is metadata only; attestation structure is unchanged
 
 2. **Analysis Mode** (CLI `analyze` command):
