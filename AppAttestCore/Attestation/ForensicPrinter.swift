@@ -148,13 +148,25 @@ public struct ForensicPrinter {
 extension AttestationObject {
     /// Forensic-grade print showing raw + decoded for everything
     public func forensicPrint(mode: ForensicMode) -> String {
+        // JSON output mode
+        if mode.showJSON {
+            let json = ForensicJSONEncoder.encode(self)
+            if let jsonData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                return jsonString
+            } else {
+                return "Error: Failed to serialize JSON"
+            }
+        }
+        
+        // Human-readable output
         var printer = ForensicPrinter(mode: mode)
         var output = ""
         
         // Header
         let header = mode.colorized ?
-            "\(ForensicPrinter.ANSIColor.header)Attestation Object (Forensic Mode)\(ForensicPrinter.ANSIColor.reset)\n\(ForensicPrinter.ANSIColor.separator)========================================\(ForensicPrinter.ANSIColor.reset)\n\n" :
-            "Attestation Object (Forensic Mode)\n========================================\n\n"
+            "\(ForensicPrinter.ANSIColor.header)Attestation Object (Forensic View)\(ForensicPrinter.ANSIColor.reset)\n\(ForensicPrinter.ANSIColor.separator)========================================\(ForensicPrinter.ANSIColor.reset)\n\n" :
+            "Attestation Object (Forensic View)\n========================================\n\n"
         output += header
         
         // Raw CBOR

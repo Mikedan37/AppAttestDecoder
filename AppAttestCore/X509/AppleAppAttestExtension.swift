@@ -173,7 +173,7 @@ public struct AppleAppAttestReceipt {
         
         var bundleID: String? = nil
         var teamID: String? = nil
-        var appVersion: String? = nil
+        let appVersion: String? = nil  // Reserved for future use
         var receiptCreationDate: Date? = nil
         var receiptExpirationDate: Date? = nil
         

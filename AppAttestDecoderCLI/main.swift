@@ -273,10 +273,6 @@ func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool,
         let attestation = try decoder.decodeAttestationObject(data)
         
         if json {
-            // JSON output mode (to be implemented)
-            printError("JSON output mode not yet implemented")
-            exit(1)
-        } else {
             // Human-readable forensic output
             let mode: ForensicMode
             if both {
