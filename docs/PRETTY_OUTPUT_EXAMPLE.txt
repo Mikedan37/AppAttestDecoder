@@ -1,0 +1,42 @@
+Attestation Object
+==================
+
+`format`: apple-appattest
+`authenticatorData`: {
+  `rpIdHash`: a3 60 c7 30 45 0e 50 1f 60 c7 30 45 0e 50 1f 60 c7 30 45 0e 50 1f 60 c7 30 45 0e 50 1f 60 c7 (32 bytes)
+  `flags`: {
+    `rawValue`: 65
+    `userPresent`: true
+    `userVerified`: false
+    `attestedCredentialData`: true
+    `extensionsIncluded`: false
+  }
+  `signCount`: 0
+  `attestedCredentialData`: {
+    `aaguid`: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (16 bytes)
+    `credentialIdLength`: 32
+    `credentialId`: f0 db 60 19 7c 29 b2 ac c0 10 8c 93 88 cf 30 e3 11 e0 50 06 04 c3 ea 54 60 b2 86 f5 dd 76 8a 1f (32 bytes)
+    `credentialPublicKey`: {
+      `kty`: EC2
+      `alg`: -7 (ES256)
+      `crv`: P-256
+      `x`: [32 bytes: hex representation]
+      `y`: [32 bytes: hex representation]
+    }
+  }
+}
+`attestationStatement`: {
+  `alg`: -7 (ES256)
+  `signature`: 8e c8 49 4a 1f 02 ce e2 99 9f 87 46 8a ef d7 f7 b6 d7 02 33 67 61 7d 8c 9e 87 b6 4f 69 13 07 9d ... (256 bytes)
+  `x5c`: {
+    `[0]`: [Certificate: 1234 bytes]
+      Subject: CN=f0db60197c29b2ac...
+      Issuer: CN=Apple App Attestation CA 1
+    `[1]`: [Certificate: 987 bytes]
+      Subject: CN=Apple App Attestation CA 1
+      Issuer: CN=Apple App Attestation Root CA
+    `[2]`: [Certificate: 1234 bytes]
+      Subject: CN=Apple App Attestation Root CA
+      Issuer: CN=Apple Root CA - G3
+  }
+}
