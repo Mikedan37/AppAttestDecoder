@@ -2,7 +2,7 @@
 
 ## Abstract
 
-This project studies the structural properties of Apple App Attest artifacts when generated from different execution contexts (main app, action extensions, UI extensions, App SSO extensions). We decode and compare attestation objects without performing validation to understand how trust signals vary across runtime environments. The decoder extracts raw materials (certificate chains, authenticator data, signatures) for analysis. No cryptographic validation or trust decisions are performed.
+This project studies the structural properties of Apple App Attest artifacts when generated from different execution contexts (main app, action extensions, App SSO extensions). We decode and compare attestation objects without performing validation to understand how trust signals vary across runtime environments. The decoder extracts raw materials (certificate chains, authenticator data, signatures) for analysis. No cryptographic validation or trust decisions are performed. This research enables first-of-its-kind comparative analysis of App Attest behavior across iOS execution surfaces.
 
 ## Motivation
 
@@ -32,21 +32,23 @@ A single container iOS app with App Attest capability enabled, containing:
    - Full app lifecycle
    - Standard UI presentation
    - App Attest key generation and attestation
+   - Reference implementation for comparison
 
 2. **Action extension target**
-   - Share sheet integration
+   - Share sheet integration (`SLComposeServiceViewController`)
    - Limited UI constraints
    - Independent App Attest key generation
+   - Generates attestation from within Share Sheet context
+   - Saves artifacts to App Group container for analysis
 
-3. **UI extension target**
-   - Widget or custom UI presentation
-   - Restricted UI capabilities
-   - Independent App Attest key generation
-
-4. **App SSO extension target**
-   - Single sign-on authentication
+3. **App SSO extension target**
+   - Single sign-on authentication (`ASCredentialProviderViewController`)
    - Security-sensitive operations
-   - Independent App Attest key generation
+   - Demonstrates trust delegation (uses assertions from main app)
+   - Identity-adjacent trust surfaces
+   - Non-primary execution context signaling
+
+**Note**: UI extension target is defined in the architecture but not yet implemented in the test app. Future work may include UI extension implementation.
 
 ### Data Collection
 

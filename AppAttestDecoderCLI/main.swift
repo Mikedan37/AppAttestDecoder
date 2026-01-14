@@ -40,7 +40,22 @@ func getContext(from args: [String]) -> AttestationContext? {
     guard let i = args.firstIndex(of: "--context"), args.count > i + 1 else {
         return nil
     }
-    return AttestationContext(rawValue: args[i + 1])
+    let rawValue = args[i + 1]
+    // Map common aliases to raw values
+    switch rawValue.lowercased() {
+    case "main", "mainapp":
+        return .mainApp
+    case "action", "actionextension":
+        return .actionExtension
+    case "sso", "appssoextension":
+        return .appSSOExtension
+    case "ui", "uiextension":
+        return .uiExtension
+    case "other", "otherextension":
+        return .otherExtension
+    default:
+        return AttestationContext(rawValue: rawValue)
+    }
 }
 
 func getBundleID(from args: [String]) -> String? {
@@ -94,6 +109,9 @@ case "selftest":
     } else {
         fatalError("Self-test failed")
     }
+
+case "annotate":
+    handleAnnotateCommand(args: args, optJSON: optJSON)
 
 case "analyze":
     handleAnalyzeCommand(args: args, optJSON: optJSON, optVerbose: optVerbose)
@@ -352,6 +370,95 @@ func decodeAssertion(_ data: Data, hex: Bool, raw: Bool, json: Bool) {
 
 // MARK: - Usage
 
+func handleAnnotateCommand(args: [String], optJSON: Bool) {
+    // Annotate command: decode an attestation and annotate it with execution context
+    // Output: JSON representation of AttestationSample
+    
+    // Required: --context
+    guard let context = getContext(from: args) else {
+        printError("Error: annotate command requires --context <main|action|sso>")
+        printError("  Valid contexts: main, action, sso")
+        exit(1)
+    }
+    
+    // Required: --bundle-id
+    guard let bundleID = getBundleID(from: args) else {
+        printError("Error: annotate command requires --bundle-id <string>")
+        exit(1)
+    }
+    
+    // Required: --team-id
+    guard let teamIDIndex = args.firstIndex(of: "--team-id"), args.count > teamIDIndex + 1 else {
+        printError("Error: annotate command requires --team-id <string>")
+        exit(1)
+    }
+    let teamID = args[teamIDIndex + 1]
+    
+    // Required: --key-id
+    guard let keyIDIndex = args.firstIndex(of: "--key-id"), args.count > keyIDIndex + 1 else {
+        printError("Error: annotate command requires --key-id <base64-string>")
+        exit(1)
+    }
+    let keyID = args[keyIDIndex + 1]
+    
+    // Read attestation (base64 or file)
+    let attestationBase64: String
+    if let base64Index = args.firstIndex(of: "--attestation-base64"), args.count > base64Index + 1 {
+        attestationBase64 = args[base64Index + 1].trimmingCharacters(in: .whitespacesAndNewlines)
+    } else if let fileIndex = args.firstIndex(of: "--file"), args.count > fileIndex + 1 {
+        attestationBase64 = readFile(args[fileIndex + 1])
+    } else {
+        // Try STDIN
+        let data = FileHandle.standardInput.readDataToEndOfFile()
+        guard let s = String(data: data, encoding: .utf8) else {
+            printError("Error: Failed to read STDIN as UTF-8")
+            exit(1)
+        }
+        attestationBase64 = s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    // Validate base64
+    guard Data(base64Encoded: attestationBase64) != nil else {
+        printError("Error: Invalid base64 attestation blob")
+        exit(1)
+    }
+    
+    // Decode attestation to verify it's valid (but don't fail if decode fails - we still want the sample)
+    let decoder = AppAttestDecoder(teamID: teamID)
+    var decodedAttestation: AttestationObject?
+    if let data = Data(base64Encoded: attestationBase64) {
+        decodedAttestation = try? decoder.decodeAttestationObject(data)
+    }
+    
+    // Create AttestationSample
+    let sample = AttestationSample(
+        context: context,
+        bundleID: bundleID,
+        teamID: teamID,
+        keyID: keyID,
+        attestationObjectBase64: attestationBase64,
+        timestamp: Date()
+    )
+    
+    // Output JSON
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .prettyPrinted
+    encoder.dateEncodingStrategy = .iso8601
+    
+    do {
+        let jsonData = try encoder.encode(sample)
+        if let jsonString = String(data: jsonData, encoding: .utf8) {
+            print(jsonString)
+        } else {
+            printError("Error: Failed to encode sample as JSON")
+            exit(1)
+        }
+    } catch {
+        printError("Error: Failed to encode AttestationSample: \(error)")
+        exit(1)
+    }
+}
+
 func handleAnalyzeCommand(args: [String], optJSON: Bool, optVerbose: Bool) {
     // Analysis mode: compare multiple AttestationSample entries
     // Input: JSON file with array of AttestationSample objects
@@ -456,6 +563,7 @@ func printUsage() {
       appattest-decode attest [--base64 <b64> | --file <path>] [options]
       appattest-decode assert [--base64 <b64> | --file <path>] [options]
       appattest-decode pretty [--base64 <b64> | --file <path>] [options]
+      appattest-decode annotate --context <ctx> --bundle-id <id> --team-id <id> --key-id <b64> [--attestation-base64 <b64> | --file <path>]
       appattest-decode analyze --file <samples.json> [options]
       appattest-decode selftest
 
@@ -463,6 +571,7 @@ func printUsage() {
       attest    Decode attestation object
       assert    Decode assertion object
       pretty    Pretty-print attestation object with hierarchical formatting
+      annotate  Decode and annotate attestation with execution context (research mode)
       analyze   Compare multiple attestation samples across execution contexts (research mode)
       selftest  Run self-test to verify CLI functionality
 
@@ -495,6 +604,22 @@ func printUsage() {
       
       # Pretty-print with verbose debugging
       ./AppAttestDecoderCLI pretty --base64 "BASE64_BLOB" --verbose
+      
+      # Annotate an attestation with execution context (research)
+      ./AppAttestDecoderCLI annotate \\
+        --context action \\
+        --bundle-id com.example.MyExtension \\
+        --team-id ABC123DEF4 \\
+        --key-id "base64-key-id" \\
+        --attestation-base64 "BASE64_ATTESTATION"
+      
+      # Annotate from file
+      ./AppAttestDecoderCLI annotate \\
+        --context main \\
+        --bundle-id com.example.app \\
+        --team-id ABC123DEF4 \\
+        --key-id "base64-key-id" \\
+        --file attestation.txt
       
       # Analyze multiple samples across execution contexts (research)
       ./AppAttestDecoderCLI analyze --file samples.json

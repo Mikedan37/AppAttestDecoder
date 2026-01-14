@@ -1366,4 +1366,230 @@ final class AppAttestCoreTests: XCTestCase {
         // - coseSign1 structure is accessible
         // - algorithm is accessible
     }
+    
+    // MARK: - Context Annotation Tests (Research)
+    
+    /// Test that AttestationSample can be created and encoded with different execution contexts
+    func testAttestationSampleContextAnnotation() throws {
+        let attestationData = try XCTUnwrap(
+            Data(base64Encoded: attestationObjectBase64),
+            "Attestation object base64 decoding failed"
+        )
+        
+        // Test with main app context
+        let mainSample = AttestationSample(
+            context: .mainApp,
+            bundleID: "com.example.app",
+            teamID: teamID,
+            keyID: "test-key-id",
+            attestationObjectBase64: attestationObjectBase64,
+            timestamp: Date()
+        )
+        
+        XCTAssertEqual(mainSample.context, .mainApp)
+        XCTAssertEqual(mainSample.bundleID, "com.example.app")
+        XCTAssertNotNil(mainSample.attestationObject, "Should decode attestation object")
+        
+        // Test with action extension context
+        let actionSample = AttestationSample(
+            context: .actionExtension,
+            bundleID: "com.example.app.ActionExtension",
+            teamID: teamID,
+            keyID: "test-key-id-2",
+            attestationObjectBase64: attestationObjectBase64,
+            timestamp: Date()
+        )
+        
+        XCTAssertEqual(actionSample.context, .actionExtension)
+        XCTAssertNotNil(actionSample.attestationObject, "Should decode attestation object")
+        
+        // Verify both samples decode the same attestation structure
+        XCTAssertEqual(
+            mainSample.attestationObject?.authenticatorData.rpIdHash,
+            actionSample.attestationObject?.authenticatorData.rpIdHash,
+            "Same attestation should have same RP ID hash regardless of context"
+        )
+    }
+    
+    /// Test that AttestationSample JSON encoding is stable and deterministic
+    func testAttestationSampleJSONEncoding() throws {
+        let sample = AttestationSample(
+            context: .appSSOExtension,
+            bundleID: "com.example.app.SSOExtension",
+            teamID: teamID,
+            keyID: "test-key-id",
+            attestationObjectBase64: attestationObjectBase64,
+            timestamp: Date(timeIntervalSince1970: 1234567890)
+        )
+        
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        encoder.dateEncodingStrategy = .iso8601
+        
+        let jsonData = try encoder.encode(sample)
+        let jsonString = String(data: jsonData, encoding: .utf8)
+        
+        XCTAssertNotNil(jsonString, "Should encode to JSON")
+        XCTAssertTrue(jsonString?.contains("sso") ?? false, "Should contain context")
+        XCTAssertTrue(jsonString?.contains("com.example.app.SSOExtension") ?? false, "Should contain bundle ID")
+        
+        // Decode and verify round-trip
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(AttestationSample.self, from: jsonData)
+        
+        XCTAssertEqual(decoded.context, .appSSOExtension)
+        XCTAssertEqual(decoded.bundleID, "com.example.app.SSOExtension")
+        XCTAssertEqual(decoded.teamID, teamID)
+        XCTAssertEqual(decoded.keyID, "test-key-id")
+        XCTAssertEqual(decoded.attestationObjectBase64, attestationObjectBase64)
+    }
+    
+    /// Test that AttestationComparison correctly analyzes multiple samples
+    func testAttestationComparisonAnalysis() throws {
+        let attestationData = try XCTUnwrap(
+            Data(base64Encoded: attestationObjectBase64),
+            "Attestation object base64 decoding failed"
+        )
+        
+        // Create samples from different contexts with the same attestation
+        let mainSample = AttestationSample(
+            context: .mainApp,
+            bundleID: "com.example.app",
+            teamID: teamID,
+            keyID: "key-1",
+            attestationObjectBase64: attestationObjectBase64,
+            timestamp: Date()
+        )
+        
+        let actionSample = AttestationSample(
+            context: .actionExtension,
+            bundleID: "com.example.app",
+            teamID: teamID,
+            keyID: "key-2",
+            attestationObjectBase64: attestationObjectBase64,
+            timestamp: Date()
+        )
+        
+        let ssoSample = AttestationSample(
+            context: .appSSOExtension,
+            bundleID: "com.example.app",
+            teamID: teamID,
+            keyID: "key-3",
+            attestationObjectBase64: attestationObjectBase64,
+            timestamp: Date()
+        )
+        
+        let samples = [mainSample, actionSample, ssoSample]
+        let comparison = try AttestationComparison(samples: samples)
+        
+        // All samples use the same attestation, so RP ID hash should be consistent
+        XCTAssertTrue(comparison.rpIdHashConsistent, "RP ID hash should be consistent for same attestation")
+        
+        // Certificate chain length should be consistent
+        XCTAssertTrue(comparison.certificateChainLengthConsistent, "Certificate chain length should be consistent")
+        
+        // All contexts should be present
+        XCTAssertEqual(comparison.rpIdHashes.count, 3, "Should have RP ID hashes for all contexts")
+        XCTAssertEqual(comparison.certificateChainLengths.count, 3, "Should have chain lengths for all contexts")
+        XCTAssertEqual(comparison.flags.count, 3, "Should have flags for all contexts")
+        
+        // Verify flags are consistent (same attestation = same flags)
+        let flagValues = Array(comparison.flags.values)
+        if flagValues.count >= 2 {
+            XCTAssertEqual(flagValues[0], flagValues[1], "Flags should be consistent for same attestation")
+        }
+    }
+    
+    /// Test that AttestationComparison JSON encoding/decoding works correctly
+    func testAttestationComparisonJSONRoundTrip() throws {
+        let mainSample = AttestationSample(
+            context: .mainApp,
+            bundleID: "com.example.app",
+            teamID: teamID,
+            keyID: "key-1",
+            attestationObjectBase64: attestationObjectBase64,
+            timestamp: Date()
+        )
+        
+        let actionSample = AttestationSample(
+            context: .actionExtension,
+            bundleID: "com.example.app",
+            teamID: teamID,
+            keyID: "key-2",
+            attestationObjectBase64: attestationObjectBase64,
+            timestamp: Date()
+        )
+        
+        let samples = [mainSample, actionSample]
+        let comparison = try AttestationComparison(samples: samples)
+        
+        // Encode to JSON
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        encoder.dateEncodingStrategy = .iso8601
+        let jsonData = try encoder.encode(comparison)
+        
+        // Decode from JSON
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(AttestationComparison.self, from: jsonData)
+        
+        // Verify round-trip
+        XCTAssertEqual(decoded.samples.count, 2, "Should decode all samples")
+        XCTAssertEqual(decoded.rpIdHashConsistent, comparison.rpIdHashConsistent)
+        XCTAssertEqual(decoded.certificateChainLengthConsistent, comparison.certificateChainLengthConsistent)
+        XCTAssertEqual(decoded.rpIdHashes.count, comparison.rpIdHashes.count)
+        XCTAssertEqual(decoded.certificateChainLengths.count, comparison.certificateChainLengths.count)
+    }
+    
+    /// Test that the same attestation decoded under different contexts does not mutate structure
+    func testContextAnnotationNoStructuralMutation() throws {
+        let attestationData = try XCTUnwrap(
+            Data(base64Encoded: attestationObjectBase64),
+            "Attestation object base64 decoding failed"
+        )
+        
+        // Decode directly
+        let decoder = AppAttestDecoder(teamID: teamID)
+        let directAttestation = try decoder.decodeAttestationObject(attestationData)
+        
+        // Create samples with different contexts
+        let contexts: [AttestationContext] = [.mainApp, .actionExtension, .appSSOExtension]
+        
+        for context in contexts {
+            let sample = AttestationSample(
+                context: context,
+                bundleID: "com.example.app",
+                teamID: teamID,
+                keyID: "test-key",
+                attestationObjectBase64: attestationObjectBase64,
+                timestamp: Date()
+            )
+            
+            guard let sampleAttestation = sample.attestationObject else {
+                XCTFail("Should decode attestation for context \(context)")
+                continue
+            }
+            
+            // Verify structure is identical regardless of context
+            XCTAssertEqual(
+                directAttestation.authenticatorData.rpIdHash,
+                sampleAttestation.authenticatorData.rpIdHash,
+                "RP ID hash should be identical for context \(context)"
+            )
+            
+            XCTAssertEqual(
+                directAttestation.authenticatorData.flags.rawValue,
+                sampleAttestation.authenticatorData.flags.rawValue,
+                "Flags should be identical for context \(context)"
+            )
+            
+            XCTAssertEqual(
+                directAttestation.attestationStatement.certificates.count,
+                sampleAttestation.attestationStatement.certificates.count,
+                "Certificate chain length should be identical for context \(context)"
+            )
+        }
+    }
 }

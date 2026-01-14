@@ -453,6 +453,8 @@ This project is a decoder only. It does not perform cryptographic validation. Se
 
 This project is part of an ongoing research effort to understand how Apple App Attest behaves across different execution contexts. The goal is observability, not validation or policy enforcement. For detailed methodology and findings, see [docs/RESEARCH.md](docs/RESEARCH.md).
 
+**This project includes a research module for studying how App Attest artifacts differ when generated from non-primary execution contexts such as Action Extensions and App SSO flows.** See [docs/EXTENSION_SETUP.md](docs/EXTENSION_SETUP.md) for setup instructions.
+
 ## Studying App Attest Across iOS Execution Contexts
 
 This project supports research and comparison of App Attest artifacts generated from different iOS execution contexts, including:
