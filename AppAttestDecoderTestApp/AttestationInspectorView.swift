@@ -68,7 +68,7 @@ struct AttestationInspectorView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: selectedMode) { _ in
+                    .onChange(of: selectedMode) {
                         decodeAttestation()
                     }
                 }
