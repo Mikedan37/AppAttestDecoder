@@ -23,10 +23,10 @@ Performs no cryptographic verification, validation, or execution-context interpr
 
 ## What This Tool Does Not Do
 
-- ❌ No cryptographic verification
-- ❌ No certificate chain validation
-- ❌ No policy or trust decisions
-- ❌ No DeviceCheck or App Attest API calls
+- No cryptographic verification
+- No certificate chain validation
+- No policy or trust decisions
+- No DeviceCheck or App Attest API calls
 
 This is an **inspection tool**, not a validator.
 
