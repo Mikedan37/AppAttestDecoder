@@ -48,7 +48,9 @@ public final class CBORDecoder {
             self.data = Data()
             return
         }
-        self.data = data
+        // Make a copy of the data to ensure it stays valid throughout decoding
+        // This prevents issues if the original Data is deallocated or modified
+        self.data = Data(data)
     }
 
     // MARK: - Entry
@@ -150,9 +152,11 @@ public final class CBORDecoder {
                 atOffset: offset
             )
         }
-        // Safe access - we've verified bounds above
-        // Access via subscript after bounds check
-        let byte = data[offset]
+        // Use withUnsafeBytes to avoid Swift runtime bounds checking issues
+        // This is safer than direct subscript access in debug mode
+        let byte = data.withUnsafeBytes { bytes in
+            return bytes[offset]
+        }
         offset += 1
         return byte
     }
