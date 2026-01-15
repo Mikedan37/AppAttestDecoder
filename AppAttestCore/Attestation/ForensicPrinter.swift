@@ -198,12 +198,7 @@ extension AttestationObject {
         output += printer.printRawData(name: "raw", data: authData.rawData)
         
         // RP ID Hash
-        output += printer.printField(
-            name: "rpIdHash",
-            raw: authData.rpIdHash,
-            decoded: nil,
-            encoding: "SHA256(bundleID)"
-        )
+        output += printer.printRawData(name: "rpIdHash", data: authData.rpIdHash)
         
         // Flags
         output += printer.printContainer(name: "flags")
@@ -243,10 +238,10 @@ extension AttestationObject {
         var output = ""
         
         // AAGUID
-        output += printer.printField(name: "aaguid", raw: credData.aaguid, decoded: nil)
+        output += printer.printRawData(name: "aaguid", data: credData.aaguid)
         
         // Credential ID
-        output += printer.printField(name: "credentialId", raw: credData.credentialId, decoded: nil)
+        output += printer.printRawData(name: "credentialId", data: credData.credentialId)
         
         // Credential Public Key
         output += printer.printContainer(name: "credentialPublicKey")
@@ -459,7 +454,11 @@ extension AttestationObject {
             output += printer.printField(name: "value", raw: nil, decoded: "\(n)")
         case .byteString(let data):
             output += printer.printField(name: "type", raw: nil, decoded: "byteString")
-            output += printer.printField(name: "value", raw: data, decoded: nil)
+            if data.count > 0 {
+                output += printer.printRawData(name: "value", data: data)
+            } else {
+                output += printer.printField(name: "value", raw: nil, decoded: "empty")
+            }
         case .textString(let s):
             output += printer.printField(name: "type", raw: nil, decoded: "textString")
             output += printer.printField(name: "value", raw: nil, decoded: "\"\(s)\"")
