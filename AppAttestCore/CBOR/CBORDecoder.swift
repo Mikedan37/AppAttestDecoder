@@ -129,8 +129,9 @@ public final class CBORDecoder {
                 atOffset: offset
             )
         }
-        defer { offset += 1 }
-        return data[offset]
+        let byte = data[offset]
+        offset += 1
+        return byte
     }
 
     private func readUInt16() throws -> UInt16 {

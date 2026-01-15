@@ -268,8 +268,21 @@ func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool,
     // Trim whitespace and newlines from base64
     let trimmedBase64 = base64.trimmingCharacters(in: .whitespacesAndNewlines)
     
+    guard !trimmedBase64.isEmpty else {
+        printError("Error: Empty base64 string")
+        exit(1)
+    }
+    
     guard let data = Data(base64Encoded: trimmedBase64) else {
         printError("Error: Invalid base64 string")
+        printError("  Base64 length: \(trimmedBase64.count) characters")
+        printError("  First 50 chars: \(String(trimmedBase64.prefix(50)))")
+        printError("  Last 50 chars: \(String(trimmedBase64.suffix(50)))")
+        exit(1)
+    }
+    
+    guard data.count > 0 else {
+        printError("Error: Decoded data is empty")
         printError("  Base64 length: \(trimmedBase64.count) characters")
         exit(1)
     }
