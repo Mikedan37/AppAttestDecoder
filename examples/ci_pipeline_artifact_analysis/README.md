@@ -22,7 +22,7 @@ CI pipelines should:
 Attestation structure can change due to:
 - iOS version upgrades (OS version in platform claims changes)
 - Apple infrastructure changes (certificate chain structure evolves)
-- Extension vs main app differences (different execution contexts)
+- Differences between artifacts from different sources
 - Key rotation (new credential IDs are expected)
 
 Failing CI on these changes creates false positives and blocks legitimate deployments. CI should archive and analyze, not enforce policy.

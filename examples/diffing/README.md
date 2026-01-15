@@ -35,7 +35,7 @@ These differences may warrant investigation:
 
 **Diff does not equal fraud:**
 - Differences may be legitimate (key rotation, OS upgrade)
-- Differences may be expected (extension vs main app)
+- Differences may be expected (artifacts from different sources)
 - Fraud detection requires additional signals beyond structure
 
 **Diff equals signal:**

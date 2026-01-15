@@ -1,16 +1,16 @@
 # App Attest Decoder CLI
 
-A Swift library and command-line tool for **inspecting Apple App Attest attestation and assertion artifacts**.
+A Swift library and CLI for inspecting Apple App Attest attestation and assertion artifacts.
 
-This project provides a **decoder-only** implementation that parses CBOR, ASN.1, COSE, and X.509 structures and exposes raw materials for downstream validation.  
-It performs **no cryptographic verification, certificate validation, or trust decisions**.
+Decoder-only: parses CBOR, ASN.1, COSE, and X.509 into semantic, forensic, diffable, and JSON representations.  
+Performs no cryptographic verification, validation, or execution-context interpretation.
 
 ## When to Use This
 
 - Inspect real device-generated App Attest artifacts
 - Debug App Attest integration issues
 - Build your own validator without reimplementing parsers
-- Compare attestations across devices, OS versions, or execution contexts
+- Compare attestations from different sources or environments
 - Archive and analyze artifacts in CI or research workflows
 
 ## What This Tool Does
@@ -112,7 +112,7 @@ Device → Attestation Artifact → [ THIS TOOL ] → Parsed Evidence → Your V
 - **Diffing:** `examples/diffing/` - Compare attestations and interpret differences
 - **iOS Test App:** `examples/ios_test_app/` - On-device inspection integration (debugging only)
 - **CI Pipeline:** `examples/ci_pipeline/` - Safe CI integration patterns
-- **Extension vs App:** `examples/extension_vs_app/` - Compare main app vs extension attestations
+- **Different Sources:** `examples/app_vs_extension_attestation/` - Compare attestations from different sources
 
 See `examples/README.md` for overview and boundaries.
 
@@ -184,7 +184,7 @@ See `docs/PROJECT_STATUS.md` for complete test coverage details.
 
 **"Diff showing change ≠ fraud"** - Differences are normal (key rotation, OS upgrades, certificate rotation). Diff shows what changed, not whether change is acceptable.
 
-**"Extension ≠ app even with same bundle ID"** - Extensions generate separate App Attest keys. Same bundle ID prefix does not mean same identity.
+**"Same bundle ID ≠ same identity"** - Different sources may generate separate App Attest keys. Same bundle ID prefix does not mean same cryptographic identity.
 
 **"Decoded ≠ stable"** - Decoded fields are parsed from current structure. Apple may change encoding or semantics in future iOS versions.
 
