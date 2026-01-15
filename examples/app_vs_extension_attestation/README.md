@@ -1,6 +1,6 @@
-# Comparing Attestations from Different Sources
+# Comparing Attestations Generated Under Different Conditions
 
-This example demonstrates comparing two attestations generated under different conditions.
+This example demonstrates comparing two attestations generated at different times or under different app behaviors.
 
 ## What This Example Shows
 
@@ -10,11 +10,11 @@ This example demonstrates comparing two attestations generated under different c
 
 ## What This Example Does Not Do
 
-- Infer execution context or source of attestations
+- Infer what conditions produced the attestations
 - Claim what differences mean or whether they're acceptable
 - Make trust or policy decisions about the artifacts
 
-**The tool does not know or care where an attestation came from. It only knows what the bytes contain.**
+**The tool does not know or care what conditions produced an attestation. It only knows what the bytes contain.**
 
 ## Usage
 
@@ -38,15 +38,15 @@ This will show structural differences between the two artifacts. Common differen
 - The tool shows what differs structurally
 - You decide what those differences mean
 - You decide if differences are acceptable for your use case
-- The tool does not infer execution context or make trust claims
+- The tool does not infer what conditions produced the artifacts or make trust claims
 
 Any conclusions about what the differences mean are your responsibility, not the tool's.
 
 ## When to Use This Pattern
 
-- Comparing attestations from different sources
+- Comparing attestations generated at different times
 - Analyzing structural differences between artifacts
 - Debugging why two attestations look different
 - Research into artifact variations
 
-This example compares two artifacts. The tool does not infer why they differ or whether those differences are significant.
+This example compares two artifacts. The tool does not infer why they differ, what conditions produced them, or whether those differences are significant.

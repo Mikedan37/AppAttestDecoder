@@ -10,7 +10,7 @@ Performs no cryptographic verification, validation, or execution-context interpr
 - Inspect real device-generated App Attest artifacts
 - Debug App Attest integration issues
 - Build your own validator without reimplementing parsers
-- Compare attestations from different sources or environments
+- Compare attestations generated at different times or under different app behaviors
 - Archive and analyze artifacts in CI or research workflows
 
 ## What This Tool Does
@@ -112,7 +112,7 @@ Device → Attestation Artifact → [ THIS TOOL ] → Parsed Evidence → Your V
 - **Diffing:** `examples/diffing/` - Compare attestations and interpret differences
 - **iOS Test App:** `examples/ios_test_app/` - On-device inspection integration (debugging only)
 - **CI Pipeline:** `examples/ci_pipeline/` - Safe CI integration patterns
-- **Different Sources:** `examples/app_vs_extension_attestation/` - Compare attestations from different sources
+- **Different Artifacts:** `examples/app_vs_extension_attestation/` - Compare attestations generated under different conditions
 
 See `examples/README.md` for overview and boundaries.
 
@@ -184,7 +184,7 @@ See `docs/PROJECT_STATUS.md` for complete test coverage details.
 
 **"Diff showing change ≠ fraud"** - Differences are normal (key rotation, OS upgrades, certificate rotation). Diff shows what changed, not whether change is acceptable.
 
-**"Same bundle ID ≠ same identity"** - Different sources may generate separate App Attest keys. Same bundle ID prefix does not mean same cryptographic identity.
+**"Same bundle ID ≠ same identity"** - Different artifacts may reference different App Attest keys, depending on how the app chose to generate them. Same bundle ID prefix does not mean same cryptographic identity.
 
 **"Decoded ≠ stable"** - Decoded fields are parsed from current structure. Apple may change encoding or semantics in future iOS versions.
 
@@ -196,4 +196,4 @@ See `LICENSE` file.
 
 ---
 
-**Status:** Production-ready. See `docs/PROJECT_STATUS.md` for complete assessment.
+**Status:** Stable for production inspection workflows. See `docs/PROJECT_STATUS.md` for complete assessment.
