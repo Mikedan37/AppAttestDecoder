@@ -211,8 +211,8 @@ extension AttestationObject {
     }
     
     /// Full transcript mode: linear narrative format
-    private func forensicPrintTranscript(colorized: Bool) -> String {
-        var transcript = ForensicTranscriptPrinter(colorized: colorized)
+    private func forensicPrintTranscript(colorized: Bool, showRaw: Bool = false) -> String {
+        var transcript = ForensicTranscriptPrinter(colorized: colorized, showRaw: showRaw)
         var output = ""
         
         // 1. Prominent Header
@@ -385,41 +385,36 @@ extension AttestationObject {
             output += transcript.field(name: "    Signature", value: "Not present (certificate-based attestation)", indent: 4, symbol: ForensicTranscriptPrinter.StatusSymbol.opaque)
         }
         
-        // Raw bytes (collapsed)
+        // Raw bytes collected for end (if showRaw)
         if !attestationStatement.signature.isEmpty {
-            output += "\n  Raw Bytes:\n"
-            output += transcript.rawDataBlock(title: "Signature", data: attestationStatement.signature, encoding: "ECDSA", collapsed: true)
+            transcript.addRawDataBlock(title: "Signature", data: attestationStatement.signature, encoding: "ECDSA")
         }
         
         // Certificate Chain
         if !attestationStatement.x5c.isEmpty {
-            output += transcript.sectionTitle("Certificate Chain")
-            
             for (index, certDER) in attestationStatement.x5c.enumerated() {
                 let role = index == 0 ? "Leaf" : index == attestationStatement.x5c.count - 1 ? "Root" : "Intermediate"
-                output += transcript.sectionTitle("Certificate [\(index)] — \(role)", symbol: "▶")
                 
                 // Parsed certificate
                 if let cert = try? X509Certificate.parse(der: certDER) {
-                    // Summary first
-                    output += "  Summary:\n"
+                    var certContent = ""
+                    
+                    // Summary (two-column)
                     let subjectStr = cert.subject.attributes.first(where: { $0.oid == "2.5.4.3" })?.value ?? cert.subject.description
-                    output += transcript.field(name: "    Subject", value: subjectStr, indent: 4)
+                    certContent += transcript.twoColumnField(key: "SUBJECT", value: subjectStr)
                     
                     let issuerStr = cert.issuer.attributes.first(where: { $0.oid == "2.5.4.3" })?.value ?? cert.issuer.description
-                    output += transcript.field(name: "    Issuer", value: issuerStr, indent: 4)
+                    certContent += transcript.twoColumnField(key: "ISSUER", value: issuerStr)
                     
                     let formatter = ISO8601DateFormatter()
                     formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
-                    output += transcript.field(name: "    Validity", value: "", indent: 4)
-                    output += transcript.field(name: "      Not Before", value: formatter.string(from: cert.validity.notBefore), indent: 6)
-                    output += transcript.field(name: "      Not After", value: formatter.string(from: cert.validity.notAfter), indent: 6)
+                    certContent += transcript.twoColumnField(key: "NOT BEFORE", value: formatter.string(from: cert.validity.notBefore))
+                    certContent += transcript.twoColumnField(key: "NOT AFTER", value: formatter.string(from: cert.validity.notAfter))
                     
                     // Extensions (Decoded) - with visual indicators
                     let decodedExts = cert.decodedExtensions
                     if !decodedExts.isEmpty {
-                        output += "\n  Extensions (Decoded):\n"
-                        
+                        certContent += "\n"
                         for (oid, ext) in decodedExts.sorted(by: { $0.key < $1.key }) {
                             let extName = X509OID.name(for: oid)
                             let symbol: String
@@ -430,47 +425,37 @@ extension AttestationObject {
                                 symbol = ForensicTranscriptPrinter.StatusSymbol.opaque
                             }
                             
-                            output += transcript.field(name: "    \(symbol) \(extName)", value: "", indent: 4)
+                            certContent += "\(symbol) \(extName):\n"
                             
                             switch ext {
                             case .basicConstraints(let isCA, let pathLength):
-                                output += transcript.bulletPoint("isCA: \(isCA)", indent: 6)
+                                certContent += transcript.bulletPoint("isCA: \(isCA)", indent: 2)
                                 if let pathLength = pathLength {
-                                    output += transcript.bulletPoint("pathLengthConstraint: \(pathLength)", indent: 6)
+                                    certContent += transcript.bulletPoint("pathLengthConstraint: \(pathLength)", indent: 2)
                                 }
                             case .keyUsage(let usages):
                                 for usage in usages {
-                                    output += transcript.bulletPoint(usage.name, indent: 6)
+                                    certContent += transcript.bulletPoint(usage.name, indent: 2)
                                 }
                             case .extendedKeyUsage(let usages):
                                 for usage in usages {
-                                    output += transcript.bulletPoint(usage.name, indent: 6)
+                                    certContent += transcript.bulletPoint(usage.name, indent: 2)
                                 }
                             case .appleOID(_, let appleExt):
-                                output += transcriptPrintAppleExtension(appleExt, transcript: &transcript, indent: 6)
+                                certContent += transcriptPrintAppleExtension(appleExt, transcript: &transcript, indent: 2)
                             case .unknown(_, _):
-                                output += transcript.bulletPoint("Opaque (raw DER preserved)", indent: 6)
+                                certContent += transcript.bulletPoint("Opaque (raw DER preserved)", indent: 2)
                             }
                         }
                     }
                     
-                    // Extensions (Raw) - collapsed
-                    if !cert.extensions.isEmpty {
-                        output += "\n  Extensions (Raw):\n"
-                        for (oid, rawDER) in cert.extensions.sorted(by: { $0.key < $1.key }) {
-                            let extName = X509OID.name(for: oid)
-                            output += transcript.field(name: "    [OID \(oid)]", value: "\(extName) — \(rawDER.count) bytes", indent: 4)
-                        }
-                    }
+                    output += transcript.boxedSection("CERTIFICATE [\(index)] — \(role)", content: certContent)
                     
-                    // Raw DER (collapsed)
-                    output += "\n  Raw Bytes:\n"
-                    output += transcript.rawDataBlock(title: "DER Certificate", data: certDER, encoding: "DER", collapsed: true)
+                    // Raw DER collected for end (if showRaw)
+                    transcript.addRawDataBlock(title: "Certificate[\(index)] DER", data: certDER, encoding: "DER")
                 } else {
-                    output += transcript.field(name: "  Parse Error", value: "Failed to parse certificate", indent: 2)
+                    output += transcript.boxedSection("CERTIFICATE [\(index)] — \(role)", content: "Parse Error: Failed to parse certificate")
                 }
-                
-                output += "\n"
             }
         }
         
@@ -482,16 +467,18 @@ extension AttestationObject {
            })?.1,
            case .byteString(let receiptData) = receiptValue {
             output += transcript.sectionTitle("Receipt")
-            output += transcript.rawDataBlock(title: "Receipt", data: receiptData, encoding: "CBOR", collapsed: true)
+            output += transcript.twoColumnField(key: "RECEIPT", value: "present (\(receiptData.count) bytes)")
+            // Raw bytes collected for end (if showRaw)
+            transcript.addRawDataBlock(title: "Receipt", data: receiptData, encoding: "CBOR")
         }
         
-        // 3. RAW BYTES (all raw data at the end)
-        output += transcript.sectionHeader("RAW BYTES")
-        output += "All raw data preserved for audit:\n\n"
-        
+        // 3. RAW BYTES (only if showRaw=true, at the very end)
         if let rawData = rawData {
-            output += transcript.rawDataBlock(title: "CBOR RAW PAYLOAD", data: rawData, encoding: "CBOR", collapsed: false)
+            transcript.addRawDataBlock(title: "CBOR RAW PAYLOAD", data: rawData, encoding: "CBOR")
         }
+        
+        // Add all collected raw data blocks
+        output += transcript.renderRawDataSection()
         
         return output
     }

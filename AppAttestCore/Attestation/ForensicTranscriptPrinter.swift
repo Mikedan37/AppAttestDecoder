@@ -9,15 +9,36 @@
 import Foundation
 
 /// Linear transcript printer for forensic reports
-/// Presents data as a continuous narrative: raw bytes always precede interpretation
+/// Presents data as a continuous narrative: raw bytes only shown if showRaw=true, at the end
 struct ForensicTranscriptPrinter {
     let colorized: Bool
+    let showRaw: Bool
     private let dateFormatter: ISO8601DateFormatter
+    private var rawDataBlocks: [(title: String, data: Data, encoding: String?)] = []
     
-    init(colorized: Bool = false) {
+    init(colorized: Bool = false, showRaw: Bool = false) {
         self.colorized = colorized
+        self.showRaw = showRaw
         self.dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    }
+    
+    mutating func addRawDataBlock(title: String, data: Data, encoding: String? = nil) {
+        rawDataBlocks.append((title: title, data: data, encoding: encoding))
+    }
+    
+    func renderRawDataSection() -> String {
+        guard showRaw && !rawDataBlocks.isEmpty else { return "" }
+        
+        var output = sectionHeader("RAW BYTES")
+        output += "All raw data preserved for audit:\n\n"
+        
+        for block in rawDataBlocks {
+            output += rawDataBlock(title: block.title, data: block.data, encoding: block.encoding, collapsed: false)
+            output += "\n"
+        }
+        
+        return output
     }
     
     // MARK: - Section Headers
