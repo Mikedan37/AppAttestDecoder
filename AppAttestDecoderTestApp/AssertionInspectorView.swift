@@ -96,20 +96,32 @@ struct AssertionInspectorView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(isDecoding || base64Assertion.isEmpty)
                 
-                // Error Display
+                // Status Display (error or partial decode notice)
                 if let error {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Error")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(error)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.red)
-                            .textSelection(.enabled)
+                        if error.contains("Partial Decode") || error.contains("server-side context") {
+                            // Non-fatal: Partial decode available (expected for App Attest)
+                            Label("Partial Decode Available", systemImage: "exclamationmark.triangle")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                            Text(error)
+                                .font(.system(.caption))
+                                .foregroundColor(.secondary)
+                                .textSelection(.enabled)
+                        } else {
+                            // Fatal error
+                            Label("Error", systemImage: "xmark.circle")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                            Text(error)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(.red)
+                                .textSelection(.enabled)
+                        }
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.red.opacity(0.1))
+                    .background(error.contains("Partial Decode") || error.contains("server-side context") ? Color.orange.opacity(0.1) : Color.red.opacity(0.1))
                     .cornerRadius(8)
                 }
                 
