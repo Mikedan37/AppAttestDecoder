@@ -26,7 +26,8 @@ struct AssertionInspectorView: View {
     
     @State private var selectedMode: InspectionMode = .semantic
     @State private var output: String = ""
-    @State private var error: String?
+    @State private var partialDecodeInfo: String? // Informational, not an error
+    @State private var fatalError: String? // Only for truly fatal errors
     @State private var isDecoding: Bool = false
     
     @Environment(\.dismiss) private var dismiss
@@ -48,27 +49,27 @@ struct AssertionInspectorView: View {
     var body: some View {
         // No nested NavigationView - we're already in a NavigationStack from ContentView
         ScrollView {
-                VStack(spacing: 16) {
-                    // Base64 Input (read-only)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Assertion Object (Base64)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        ScrollView {
-                            Text(base64Assertion)
-                                .font(.system(.caption, design: .monospaced))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .frame(height: 100)
-                        .padding(8)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(8)
+            VStack(spacing: 12) {
+                // Base64 Input (read-only) - compact layout
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Assertion Object (Base64)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    ScrollView {
+                        Text(base64Assertion)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .frame(height: 100)
+                    .padding(8)
+                    .background(Color(.systemGray6))
+                    .cornerRadius(8)
+                }
                 
-                // Mode Selector
-                VStack(alignment: .leading, spacing: 6) {
+                // Mode Selector - compact spacing
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Inspection Mode")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -84,7 +85,7 @@ struct AssertionInspectorView: View {
                     }
                 }
                 
-                // Decode Button
+                // Decode Button - minimal spacing from input
                 Button(action: decodeAssertion) {
                     HStack {
                         if isDecoding {
@@ -98,34 +99,37 @@ struct AssertionInspectorView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(isDecoding || base64Assertion.isEmpty)
                 
-                // Status Display (warning/info for partial decode, error for fatal)
-                // Appears below button as per visual hierarchy requirements
-                if let error {
+                // Partial Decode Info (informational, not error)
+                if let info = partialDecodeInfo {
                     VStack(alignment: .leading, spacing: 4) {
-                        if error.contains("Partial Decode") || error.contains("server-side context") || error.contains("expected behavior") {
-                            // Non-fatal: Partial decode available (expected for App Attest)
-                            // Use amber/orange warning styling, not red
-                            Label("Partial Decode Available (Expected for App Attest Assertions)", systemImage: "info.circle")
-                                .font(.caption)
-                                .foregroundColor(.orange)
-                            Text(error)
-                                .font(.system(.caption))
-                                .foregroundColor(.secondary)
-                                .textSelection(.enabled)
-                        } else {
-                            // Fatal error (invalid Base64, invalid CBOR)
-                            Label("Error", systemImage: "xmark.circle")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                            Text(error)
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundColor(.red)
-                                .textSelection(.enabled)
-                        }
+                        Label("Partial / Context-Dependent Decode", systemImage: "info.circle")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                        Text(info)
+                            .font(.system(.caption))
+                            .foregroundColor(.secondary)
+                            .textSelection(.enabled)
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(error.contains("Partial Decode") || error.contains("server-side context") || error.contains("expected behavior") ? Color.orange.opacity(0.1) : Color.red.opacity(0.1))
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(8)
+                }
+                
+                // Fatal Error (only for truly fatal errors)
+                if let error = fatalError {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Error", systemImage: "xmark.circle")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                        Text(error)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(.red)
+                            .textSelection(.enabled)
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.red.opacity(0.1))
                     .cornerRadius(8)
                 }
                 
@@ -156,12 +160,12 @@ struct AssertionInspectorView: View {
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
                     }
-                } else if error == nil && !isDecoding {
+                } else if fatalError == nil && partialDecodeInfo == nil && !isDecoding {
                     Text("Tap 'Inspect' to decode the assertion")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 40)
+                        .padding(.vertical, 20)
                 }
             }
             .padding()
@@ -198,13 +202,14 @@ struct AssertionInspectorView: View {
     /// - Partial decode: Valid CBOR but COSE_Sign1 requires server-side context (expected for App Attest)
     ///   Partial decode is NOT an error—it's expected behavior. We extract what we can.
     private func decodeAssertion() {
-        error = nil
+        partialDecodeInfo = nil
+        fatalError = nil
         output = ""
         isDecoding = true
         
         // Validate Base64 (graceful error handling, no force unwraps)
         guard let data = Data(base64Encoded: base64Assertion.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            error = "Invalid Base64 encoding"
+            fatalError = "Invalid Base64 encoding"
             isDecoding = false
             return
         }
@@ -219,7 +224,7 @@ struct AssertionInspectorView: View {
             } catch {
                 // Fatal error: Invalid CBOR structure
                 DispatchQueue.main.async {
-                    self.error = "Invalid CBOR structure: \(error.localizedDescription)"
+                    self.fatalError = "Invalid CBOR structure: \(error.localizedDescription)"
                     self.isDecoding = false
                 }
                 return
@@ -295,7 +300,8 @@ struct AssertionInspectorView: View {
                 
                 DispatchQueue.main.async {
                     self.output = decodedOutput
-                    self.error = nil
+                    self.partialDecodeInfo = nil
+                    self.fatalError = nil
                     self.isDecoding = false
                 }
                 
@@ -306,17 +312,17 @@ struct AssertionInspectorView: View {
                 
                 DispatchQueue.main.async {
                     self.output = partialOutput
-                    // Clear, factual messaging: assertions are context-dependent by design
-                    // Full COSE verification requires server-provided clientDataHash and publicKey
-                    // This partial decode is expected, not an error
-                    self.error = "Assertions are context-dependent by design. Full COSE verification requires server-provided clientDataHash and publicKey. This partial decode is expected."
+                    // Informational messaging: partial decode is expected for App Attest assertions
+                    // This is NOT an error - it's how the protocol works
+                    self.partialDecodeInfo = "Partial decode is expected for App Attest assertions without server context. Assertions are verified server-side. This tool focuses on forensic inspection."
+                    self.fatalError = nil
                     self.isDecoding = false
                 }
                 
             case .invalid(let err):
-                // Unexpected error
+                // Unexpected error (shouldn't happen after CBOR decode succeeds)
                 DispatchQueue.main.async {
-                    self.error = "Unexpected decode error: \(err.localizedDescription)"
+                    self.fatalError = "Unexpected decode error: \(err.localizedDescription)"
                     self.isDecoding = false
                 }
             }
@@ -360,11 +366,13 @@ struct AssertionInspectorView: View {
         
         switch mode {
         case .semantic:
-            output += "⚠️  Partial Decode (Expected for App Attest Assertions)\n"
+            output += "Partial / Context-Dependent Decode\n"
             output += "========================================\n\n"
-            output += "COSE verification requires server-side context:\n"
+            output += "Partial decode is expected for App Attest assertions without server context.\n"
+            output += "Full COSE verification requires:\n"
             output += "  • clientDataHash (from server challenge)\n"
             output += "  • publicKey (from attestation certificate)\n\n"
+            output += "Assertions are verified server-side. This tool focuses on forensic inspection.\n\n"
             output += "Available Fields:\n"
             output += "-----------------\n"
             
@@ -393,11 +401,12 @@ struct AssertionInspectorView: View {
             }
             
         case .forensic:
-            output += "⚠️  Partial Decode (Forensic View)\n"
+            output += "Partial / Context-Dependent Decode (Forensic View)\n"
             output += "========================================\n\n"
-            output += "COSE Error: \(reason)\n"
+            output += "COSE decode limitation: \(reason)\n"
             output += "Note: App Attest assertions are context-dependent by design.\n"
-            output += "Full COSE verification requires server-side context.\n\n"
+            output += "Full COSE verification requires server-side context (clientDataHash, publicKey).\n"
+            output += "This partial decode is expected and correct for forensic inspection.\n\n"
             output += "CBOR STRUCTURE\n"
             output += "---------------\n"
             output += dumpCBORValueForDisplay(cbor, path: "assertionObject", indent: 0)
@@ -429,10 +438,11 @@ struct AssertionInspectorView: View {
             output += "Base64: \(rawData.base64EncodedString())\n"
             
         case .losslessTree:
-            output += "LOSSLESS TREE DUMP - Assertion Object (Partial)\n"
+            output += "LOSSLESS TREE DUMP - Assertion Object (Partial / Context-Dependent)\n"
             output += "========================================\n\n"
-            output += "COSE Error: \(reason)\n"
-            output += "Note: Partial decode due to context-dependent COSE structure.\n\n"
+            output += "COSE decode limitation: \(reason)\n"
+            output += "Note: Partial decode is expected for App Attest assertions.\n"
+            output += "Full COSE verification requires server-side context.\n\n"
             output += "CBOR STRUCTURE\n"
             output += "---------------\n"
             output += dumpCBORValueForDisplay(cbor, path: "assertionObject", indent: 0)
