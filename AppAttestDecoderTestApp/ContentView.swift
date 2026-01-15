@@ -2,9 +2,11 @@ import SwiftUI
 import CryptoKit
 import DeviceCheck
 import UIKit
+import AppAttestCore
 
 struct ContentView: View {
     private let service = DCAppAttestService.shared
+    @StateObject private var contextStore = AppAttestContextStore.shared
 
     @State private var isSupported: Bool?
 
@@ -146,6 +148,9 @@ struct ContentView: View {
                                     self.attestationBlobB64 = attestBlob.base64EncodedString()
                                     self.attestationError = nil
                                     print("AttestKey success: \(attestBlob.count) bytes")
+                                    
+                                    // Extract and store verification context
+                                    self.captureAttestationContext(keyID: keyID, attestationBlob: attestBlob, clientDataHash: clientDataHash)
                                 } else {
                                     self.attestationError = "Attestation failed with no error (unsupported or misconfigured)."
                                     self.attestationBlobB64 = nil
@@ -249,6 +254,9 @@ struct ContentView: View {
                                     self.assertionBlobB64 = assertionObject.base64EncodedString()
                                     self.assertionError = nil
                                     print("GenerateAssertion success: \(assertionObject.count) bytes")
+                                    
+                                    // Capture clientDataHash for assertion verification context
+                                    self.captureAssertionContext(keyID: keyID, clientDataHash: clientDataHash)
                                 } else {
                                     self.assertionError = "Assertion failed with no error (unsupported or misconfigured)."
                                     self.assertionBlobB64 = nil
@@ -391,5 +399,53 @@ struct ShareSheet: UIViewControllerRepresentable {
     
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
         // No updates needed
+    }
+}
+
+// MARK: - Context Capture Extensions
+
+extension ContentView {
+    /// Extract and store verification context from attestation
+    private func captureAttestationContext(keyID: String, attestationBlob: Data, clientDataHash: Data) {
+        // Decode attestation to extract public key from certificate chain
+        do {
+            let decoder = AppAttestDecoder(teamID: nil)
+            let attestation = try decoder.decodeAttestation(attestationBlob)
+            
+            // Extract public key from first certificate in chain (credential certificate)
+            guard let firstCertDER = attestation.attestationStatement.certificates.first else {
+                print("[ContentView] No certificates in attestation chain")
+                return
+            }
+            
+            let cert = try X509Certificate.parse(der: firstCertDER)
+            guard let publicKeyBits = cert.subjectPublicKeyBits else {
+                print("[ContentView] No public key in certificate")
+                return
+            }
+            
+            // Store context: publicKey + attestation clientDataHash
+            contextStore.storeContext(
+                keyID: keyID,
+                publicKey: publicKeyBits,
+                attestationClientDataHash: clientDataHash,
+                source: "Test App"
+            )
+            
+            print("[ContentView] Stored attestation context for keyID: \(keyID), publicKey: \(publicKeyBits.count) bytes")
+        } catch {
+            print("[ContentView] Failed to extract attestation context: \(error)")
+        }
+    }
+    
+    /// Store clientDataHash for assertion verification
+    private func captureAssertionContext(keyID: String, clientDataHash: Data) {
+        contextStore.storeContext(
+            keyID: keyID,
+            assertionClientDataHash: clientDataHash,
+            source: "Test App"
+        )
+        
+        print("[ContentView] Stored assertion context for keyID: \(keyID), clientDataHash: \(clientDataHash.count) bytes")
     }
 }
