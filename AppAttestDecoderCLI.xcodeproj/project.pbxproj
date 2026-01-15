@@ -37,19 +37,19 @@
 			remoteGlobalIDString = 90FB4A3C2F15A814009F238E;
 			remoteInfo = AppAttestCore;
 		};
-		90FB4B742F183622009F238E /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 90FB49CE2F11F2AD009F238E /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 90FB4B662F183622009F238E;
-			remoteInfo = AppAttestActionExtension;
-		};
 		90FB4A5B2F15A816009F238E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 90FB49CE2F11F2AD009F238E /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 90FB4A3C2F15A814009F238E;
 			remoteInfo = AppAttestCore;
+		};
+		90FB4B742F183622009F238E /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 90FB49CE2F11F2AD009F238E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 90FB4B662F183622009F238E;
+			remoteInfo = AppAttestActionExtension;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -667,15 +667,15 @@
 			target = 90FB4A3C2F15A814009F238E /* AppAttestCore */;
 			targetProxy = 90FB4A492F15A815009F238E /* PBXContainerItemProxy */;
 		};
-		90FB4B752F183622009F238E /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 90FB4B662F183622009F238E /* AppAttestActionExtension */;
-			targetProxy = 90FB4B742F183622009F238E /* PBXContainerItemProxy */;
-		};
 		90FB4A5A2F15A816009F238E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 90FB4A3C2F15A814009F238E /* AppAttestCore */;
 			targetProxy = 90FB4A5B2F15A816009F238E /* PBXContainerItemProxy */;
+		};
+		90FB4B752F183622009F238E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 90FB4B662F183622009F238E /* AppAttestActionExtension */;
+			targetProxy = 90FB4B742F183622009F238E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
