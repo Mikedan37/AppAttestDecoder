@@ -289,8 +289,19 @@ struct AssertionInspectorView: View {
             }
         case .map(let map):
             output += "\(indentStr)\(path): map(\(map.count) pairs)\n"
-            for (key, value) in map.sorted(by: { "\($0.key)" < "\($1.key)" }) {
-                let keyPath = "\(path).\(key)"
+            for (key, value) in map {
+                let keyStr: String
+                switch key {
+                case .utf8String(let str):
+                    keyStr = str
+                case .unsigned(let u):
+                    keyStr = "\(u)"
+                case .negative(let n):
+                    keyStr = "\(n)"
+                default:
+                    keyStr = "\(key)"
+                }
+                let keyPath = "\(path).\(keyStr)"
                 output += dumpCBORValueForDisplay(value, path: keyPath, indent: indent + 2)
             }
         case .tagged(let tag, let value):
