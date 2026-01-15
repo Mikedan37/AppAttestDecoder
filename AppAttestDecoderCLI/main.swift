@@ -139,6 +139,12 @@ func printError(_ message: String) {
 // MARK: - Input
 
 func readBase64Input(args: [String]) -> String {
+    // Helper to print errors to stderr
+    func printError(_ message: String) {
+        let data = (message + "\n").data(using: .utf8)!
+        FileHandle.standardError.write(data)
+    }
+    
     if let i = args.firstIndex(of: "--base64"), args.count > i + 1 {
         return args[i + 1].trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -149,17 +155,49 @@ func readBase64Input(args: [String]) -> String {
     }
     // STDIN fallback
     let data = FileHandle.standardInput.readDataToEndOfFile()
-    guard let s = String(data: data, encoding: .utf8) else {
-        fatalError("Failed to read STDIN as UTF-8")
+    guard !data.isEmpty else {
+        printError("Error: No input provided")
+        printError("  Please provide input via --base64, --file, or STDIN")
+        exit(1)
     }
-    return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let s = String(data: data, encoding: .utf8) else {
+        printError("Error: Failed to read STDIN as UTF-8")
+        printError("  Input must be valid UTF-8 text")
+        exit(1)
+    }
+    let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+        printError("Error: STDIN input is empty after trimming whitespace")
+        exit(1)
+    }
+    return trimmed
 }
 
 func readFile(_ path: String) -> String {
     let url = URL(fileURLWithPath: path)
-    let s = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-    guard !s.isEmpty else { fatalError("Empty or unreadable file: \(path)") }
-    return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    
+    // Check if file exists
+    guard FileManager.default.fileExists(atPath: path) else {
+        printError("Error: File not found: \(path)")
+        printError("  Please check the file path and try again.")
+        exit(1)
+    }
+    
+    // Try to read the file
+    guard let s = try? String(contentsOf: url, encoding: .utf8) else {
+        printError("Error: Failed to read file: \(path)")
+        printError("  The file may not be readable or may not be valid UTF-8.")
+        exit(1)
+    }
+    
+    let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+        printError("Error: File is empty: \(path)")
+        printError("  The file exists but contains no data.")
+        exit(1)
+    }
+    
+    return trimmed
 }
 
 // MARK: - Helpers
