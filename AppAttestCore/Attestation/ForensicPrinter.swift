@@ -50,7 +50,18 @@ public struct ForensicPrinter {
         return String(repeating: " ", count: indentLevel * indentSize)
     }
     
-    private func formatHex(_ data: Data, bytesPerGroup: Int = 4) -> String {
+    private func formatNumber(_ num: UInt32) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = ","
+        return formatter.string(from: NSNumber(value: num)) ?? "\(num)"
+    }
+    
+    private func formatHex(_ data: Data, lineLength: Int = 0) -> String {
+        return data.map { String(format: "%02x", $0) }.joined(separator: " ")
+    }
+    
+    private func formatHexOld(_ data: Data, bytesPerGroup: Int = 4) -> String {
         let hexString = data.map { String(format: "%02x", $0) }.joined()
         var formatted = ""
         for (index, char) in hexString.enumerated() {
@@ -204,71 +215,74 @@ extension AttestationObject {
         var transcript = ForensicTranscriptPrinter(colorized: colorized)
         var output = ""
         
-        // 1. Header (orientation)
-        output += transcript.sectionHeader("APP ATTEST FORENSIC TRANSCRIPT")
+        // 1. Prominent Header
+        output += transcript.summaryHeader("APPLE APP ATTEST — FORENSIC REPORT")
         
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let decodedAt = dateFormatter.string(from: Date())
         
-        if let rawData = rawData {
-            output += transcript.field(name: "CBOR length", value: "\(rawData.count) bytes")
-        }
-        output += transcript.field(name: "Decoded at", value: decodedAt)
-        output += transcript.field(name: "Tool mode", value: "forensic/full")
-        output += transcript.field(name: "Format", value: format)
-        output += "\n"
-        
-        // Summary (quick orientation)
-        output += transcript.subsectionHeader("Summary")
+        // Summary (quick orientation) - FIRST, most prominent
+        output += "Summary:\n"
         
         // Format
-        output += transcript.field(name: "Format", value: format)
+        output += transcript.field(name: "  Format", value: format, indent: 2)
         
         // Certificate chain
         let chainLength = attestationStatement.x5c.count
-        output += transcript.field(name: "Certificate chain", value: "\(chainLength) certificate\(chainLength == 1 ? "" : "s")")
+        var chainStructure = ""
         if chainLength > 0 {
-            let roles = chainLength == 1 ? "root" : chainLength == 2 ? "leaf, root" : "leaf, \(chainLength - 2) intermediate(s), root"
-            output += transcript.field(name: "  Chain structure", value: roles, indent: 2)
+            if chainLength == 1 {
+                chainStructure = "root"
+            } else if chainLength == 2 {
+                chainStructure = "leaf → root"
+            } else {
+                chainStructure = "leaf → \(chainLength - 2) intermediate(s) → root"
+            }
         }
+        output += transcript.field(name: "  Certificate Chain", value: "\(chainLength) certificate\(chainLength == 1 ? "" : "s") (\(chainStructure))", indent: 2)
         
         // Receipt
         let receiptPresent = (attestationStatement.rawCBOR.mapValue?.first(where: { key, _ in
             if case .textString("receipt") = key { return true }
             return false
         }) != nil)
-        output += transcript.field(name: "Receipt present", value: receiptPresent ? "yes" : "no")
+        output += transcript.field(name: "  Receipt Present", value: receiptPresent ? "yes" : "no", indent: 2)
         
         // Attested credential
-        output += transcript.field(name: "Attested credential", value: authenticatorData.attestedCredentialData != nil ? "present" : "absent")
+        output += transcript.field(name: "  Attested Credential", value: authenticatorData.attestedCredentialData != nil ? "present" : "absent", indent: 2)
         
         // Environment (if decodable)
         var environment: String? = nil
+        var decodedExtCount = 0
+        var opaqueExtCount = 0
         if let leafCertDER = attestationStatement.x5c.first,
            let leafCert = try? X509Certificate.parse(der: leafCertDER) {
             for (_, ext) in leafCert.decodedExtensions {
-                if case .appleOID(_, let appleExt) = ext {
+                switch ext {
+                case .appleOID(_, let appleExt):
                     if case .environment(let env) = appleExt.type {
                         environment = env
-                        break
                     }
+                    decodedExtCount += 1
+                case .basicConstraints, .keyUsage, .extendedKeyUsage:
+                    decodedExtCount += 1
+                case .unknown:
+                    opaqueExtCount += 1
                 }
             }
         }
         if let env = environment {
-            output += transcript.field(name: "Environment", value: env)
+            output += transcript.field(name: "  Environment", value: env, indent: 2)
         } else {
-            output += transcript.field(name: "Environment", value: "not decodable (see extensions)")
+            output += transcript.field(name: "  Environment", value: "not decodable (see extensions)", indent: 2)
         }
         
-        // Extensions
-        var extensionCount = 0
-        if let leafCertDER = attestationStatement.x5c.first,
-           let leafCert = try? X509Certificate.parse(der: leafCertDER) {
-            extensionCount = leafCert.decodedExtensions.count
+        // Extensions summary
+        let totalExtCount = decodedExtCount + opaqueExtCount
+        if totalExtCount > 0 {
+            output += transcript.field(name: "  Extensions", value: "\(totalExtCount) total (\(decodedExtCount) decoded, \(opaqueExtCount) opaque)", indent: 2)
         }
-        output += transcript.field(name: "Extensions", value: "\(extensionCount) extension\(extensionCount == 1 ? "" : "s") (preserved, not all interpreted)")
         
         output += "\n"
         
@@ -277,33 +291,35 @@ extension AttestationObject {
             output += transcript.rawDataBlock(title: "CBOR RAW PAYLOAD", data: rawData, encoding: "CBOR")
         }
         
-        // 3. Structural walkthrough
-        output += transcript.sectionHeader("CBOR STRUCTURE WALKTHROUGH")
-        output += "Map (2 entries):\n\n"
-        output += "1. \"authenticatorData\"\n"
-        output += "   Raw length: \(authenticatorData.rawData.count) bytes\n"
-        output += "   Encoding: WebAuthn Authenticator Data\n\n"
+        // 2. DECODED SECTIONS (Summary → Decoded → Raw hierarchy)
         
-        // Authenticator Data - Raw
-        output += transcript.rawDataBlock(title: "AUTHENTICATOR DATA — RAW", data: authenticatorData.rawData, encoding: "WebAuthn Authenticator Data")
+        // Authenticator Data
+        output += transcript.sectionTitle("Authenticator Data")
         
-        // Authenticator Data - Decoded
-        output += transcript.subsectionHeader("AUTHENTICATOR DATA — DECODED")
+        // Summary first
+        output += "  Summary:\n"
+        output += transcript.field(name: "    RP ID Hash", value: "SHA256(\(format))", indent: 4)
+        output += transcript.field(name: "    Flags", value: "0x\(String(format: "%02x", authenticatorData.flags.rawValue))", indent: 4)
+        output += transcript.bulletPoint("User Present: \(authenticatorData.flags.userPresent)", indent: 6)
+        output += transcript.bulletPoint("User Verified: \(authenticatorData.flags.userVerified)", indent: 6)
+        output += transcript.bulletPoint("Attested Credential Data: \(authenticatorData.flags.attestedCredentialData)", indent: 6)
+        output += transcript.bulletPoint("Extensions Included: \(authenticatorData.flags.extensionsIncluded)", indent: 6)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = ","
+        let signCountFormatted = formatter.string(from: NSNumber(value: authenticatorData.signCount)) ?? "\(authenticatorData.signCount)"
+        output += transcript.fieldWithContext(name: "    Sign Count", value: signCountFormatted, context: "anti-replay counter", indent: 4)
         
-        output += transcript.fieldWithRaw(
-            name: "rpIdHash",
-            decoded: "SHA-256(bundleID)",
-            raw: authenticatorData.rpIdHash,
-            encoding: "SHA256"
-        )
+        // Decoded Fields
+        output += "\n  Decoded Fields:\n"
+        let rpIdHashHex = authenticatorData.rpIdHash.map { String(format: "%02x", $0) }.joined(separator: " ")
+        output += transcript.fieldWithRaw(name: "    RP ID Hash", decoded: rpIdHashHex, raw: authenticatorData.rpIdHash, encoding: "SHA256", indent: 4, showRaw: false)
+        output += transcript.field(name: "    Flags byte", value: "0x\(String(format: "%02x", authenticatorData.flags.rawValue))", indent: 4)
+        output += transcript.field(name: "    Extensions", value: authenticatorData.extensions != nil ? "present" : "none", indent: 4)
         
-        output += transcript.field(name: "flags", value: "0x\(String(format: "%02x", authenticatorData.flags.rawValue)) (\(authenticatorData.flags.rawValue))")
-        output += transcript.field(name: "  userPresent", value: "\(authenticatorData.flags.userPresent)", indent: 2)
-        output += transcript.field(name: "  userVerified", value: "\(authenticatorData.flags.userVerified)", indent: 2)
-        output += transcript.field(name: "  attestedCredentialData", value: "\(authenticatorData.flags.attestedCredentialData)", indent: 2)
-        output += transcript.field(name: "  extensionsIncluded", value: "\(authenticatorData.flags.extensionsIncluded)", indent: 2)
-        
-        output += transcript.field(name: "signCount", value: "\(authenticatorData.signCount)")
+        // Raw Bytes (collapsed)
+        output += "\n  Raw Bytes:\n"
+        output += transcript.rawDataBlock(title: "Authenticator Data", data: authenticatorData.rawData, encoding: "WebAuthn Authenticator Data", collapsed: true)
         
         // Attested Credential Data
         if let credData = authenticatorData.attestedCredentialData {

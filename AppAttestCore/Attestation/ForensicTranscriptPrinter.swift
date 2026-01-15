@@ -23,7 +23,7 @@ struct ForensicTranscriptPrinter {
     // MARK: - Section Headers
     
     func sectionHeader(_ title: String) -> String {
-        let separator = String(repeating: "=", count: title.count)
+        let separator = String(repeating: "=", count: max(title.count, 50))
         if colorized {
             return "\n\(ANSIColor.header)\(title)\(ANSIColor.reset)\n\(ANSIColor.separator)\(separator)\(ANSIColor.reset)\n\n"
         } else {
@@ -40,32 +40,53 @@ struct ForensicTranscriptPrinter {
         }
     }
     
-    // MARK: - Raw Data Blocks
+    func summaryHeader(_ title: String) -> String {
+        let separator = String(repeating: "=", count: max(title.count, 50))
+        if colorized {
+            return "\n\(ANSIColor.summaryHeader)\(separator)\(ANSIColor.reset)\n\(ANSIColor.summaryHeader)\(title)\(ANSIColor.reset)\n\(ANSIColor.summaryHeader)\(separator)\(ANSIColor.reset)\n\n"
+        } else {
+            return "\n\(separator)\n\(title)\n\(separator)\n\n"
+        }
+    }
     
-    func rawDataBlock(title: String, data: Data, encoding: String? = nil) -> String {
+    func sectionTitle(_ title: String, symbol: String = "▶") -> String {
+        if colorized {
+            return "\n\(ANSIColor.sectionTitle)\(symbol) \(title)\(ANSIColor.reset)\n"
+        } else {
+            return "\n\(symbol) \(title)\n"
+        }
+    }
+    
+    // MARK: - Raw Data Blocks (collapsed/indented)
+    
+    func rawDataBlock(title: String, data: Data, encoding: String? = nil, collapsed: Bool = true) -> String {
         var output = ""
         
-        if colorized {
-            output += "\(ANSIColor.rawLabel)[\(title)]\(ANSIColor.reset)\n"
+        if collapsed {
+            // Collapsed view - just summary
+            if colorized {
+                output += "\(ANSIColor.rawLabel)  [Raw Bytes: \(data.count) bytes]\(ANSIColor.reset)\n"
+            } else {
+                output += "  [Raw Bytes: \(data.count) bytes]\n"
+            }
         } else {
-            output += "[\(title)]\n"
-        }
-        
-        if let encoding = encoding {
-            output += "Encoding: \(encoding)\n"
-        }
-        output += "Length: \(data.count) bytes\n\n"
-        
-        output += "Hex:\n"
-        output += formatHex(data, lineLength: 80) + "\n\n"
-        
-        output += "Base64:\n"
-        output += formatBase64(data) + "\n\n"
-        
-        if colorized {
-            output += "\(ANSIColor.separator)(End \(title))\(ANSIColor.reset)\n"
-        } else {
-            output += "(End \(title))\n"
+            // Full view
+            if colorized {
+                output += "\(ANSIColor.rawLabel)  [\(title)]\(ANSIColor.reset)\n"
+            } else {
+                output += "  [\(title)]\n"
+            }
+            
+            if let encoding = encoding {
+                output += "  Encoding: \(encoding)\n"
+            }
+            output += "  Length: \(data.count) bytes\n\n"
+            
+            output += "  Hex:\n"
+            output += formatHex(data, lineLength: 80, indent: 2) + "\n\n"
+            
+            output += "  Base64:\n"
+            output += "  \(formatBase64(data))\n"
         }
         
         return output
@@ -73,49 +94,67 @@ struct ForensicTranscriptPrinter {
     
     // MARK: - Decoded Fields
     
-    func field(name: String, value: String, indent: Int = 0) -> String {
+    func field(name: String, value: String, indent: Int = 0, symbol: String? = nil) -> String {
         let indentStr = String(repeating: " ", count: indent)
         let nameFormatted = colorized ? "\(ANSIColor.fieldName)\(name)\(ANSIColor.reset)" : name
-        return "\(indentStr)\(nameFormatted): \(value)\n"
+        let symbolStr = symbol != nil ? "\(symbol!) " : ""
+        return "\(indentStr)\(symbolStr)\(nameFormatted): \(value)\n"
     }
     
-    func fieldWithRaw(name: String, decoded: String, raw: Data, encoding: String? = nil, indent: Int = 0) -> String {
+    func fieldWithContext(name: String, value: String, context: String, indent: Int = 0) -> String {
+        let indentStr = String(repeating: " ", count: indent)
+        let nameFormatted = colorized ? "\(ANSIColor.fieldName)\(name)\(ANSIColor.reset)" : name
+        let contextFormatted = colorized ? "\(ANSIColor.context)(\(context))\(ANSIColor.reset)" : "(\(context))"
+        return "\(indentStr)\(nameFormatted) \(contextFormatted): \(value)\n"
+    }
+    
+    func fieldWithRaw(name: String, decoded: String, raw: Data, encoding: String? = nil, indent: Int = 0, showRaw: Bool = false) -> String {
         var output = ""
         let indentStr = String(repeating: " ", count: indent)
         let nameFormatted = colorized ? "\(ANSIColor.fieldName)\(name)\(ANSIColor.reset)" : name
         
-        output += "\(indentStr)\(nameFormatted):\n"
-        output += "\(indentStr)  \(decoded)\n"
-        if let encoding = encoding {
-            output += "\(indentStr)  Encoding: \(encoding)\n"
+        output += "\(indentStr)\(nameFormatted): \(decoded)\n"
+        
+        if showRaw {
+            if let encoding = encoding {
+                output += "\(indentStr)  Encoding: \(encoding)\n"
+            }
+            output += "\(indentStr)  Raw hex: \(formatHex(raw, lineLength: 0))\n"
+        } else {
+            output += "\(indentStr)  [\(raw.count) bytes, hex available in raw section]\n"
         }
-        output += "\(indentStr)  Raw hex: \(formatHex(raw, lineLength: 0))\n"
         
         return output
     }
     
+    func bulletPoint(_ text: String, indent: Int = 0, symbol: String = "•") -> String {
+        let indentStr = String(repeating: " ", count: indent)
+        return "\(indentStr)\(symbol) \(text)\n"
+    }
+    
     // MARK: - Formatting
     
-    private func formatHex(_ data: Data, lineLength: Int = 80) -> String {
+    private func formatHex(_ data: Data, lineLength: Int = 80, indent: Int = 0) -> String {
         let hexString = data.map { String(format: "%02x", $0) }.joined()
+        let indentStr = String(repeating: " ", count: indent)
         
         if lineLength == 0 {
             // Single line, no wrapping
             return hexString
         }
         
-        // Wrap at lineLength characters (2 chars per byte)
+        // Wrap at lineLength characters (2 chars per byte), group bytes
         var formatted = ""
-        var currentLine = ""
-        for (index, char) in hexString.enumerated() {
-            currentLine.append(char)
-            if (index + 1) % (lineLength / 2) == 0 {
+        var currentLine = indentStr
+        for (index, byte) in data.enumerated() {
+            if index > 0 && index % 16 == 0 {
                 formatted += currentLine + "\n"
-                currentLine = ""
+                currentLine = indentStr
             }
+            currentLine += String(format: "%02x ", byte)
         }
-        if !currentLine.isEmpty {
-            formatted += currentLine
+        if !currentLine.isEmpty && currentLine != indentStr {
+            formatted += currentLine.trimmingCharacters(in: .whitespaces) + "\n"
         }
         return formatted
     }
@@ -127,11 +166,24 @@ struct ForensicTranscriptPrinter {
     // MARK: - ANSI Colors
     
     enum ANSIColor {
-        static let header = "\u{001B}[1;36m"      // Bold cyan
-        static let subheader = "\u{001B}[1;33m"    // Bold yellow
-        static let fieldName = "\u{001B}[36m"      // Cyan
-        static let rawLabel = "\u{001B}[1;35m"     // Bold magenta
-        static let separator = "\u{001B}[90m"      // Dark gray
+        static let summaryHeader = "\u{001B}[1;33m"    // Bold yellow (prominent)
+        static let header = "\u{001B}[1;36m"          // Bold cyan
+        static let subheader = "\u{001B}[1;33m"       // Bold yellow
+        static let sectionTitle = "\u{001B}[1;32m"     // Bold green
+        static let fieldName = "\u{001B}[36m"          // Cyan
+        static let context = "\u{001B}[90m"             // Dark gray (for context)
+        static let rawLabel = "\u{001B}[2;90m"          // Dim gray (de-emphasized)
+        static let separator = "\u{001B}[90m"           // Dark gray
+        static let decoded = "\u{001B}[32m"             // Green (decoded values)
         static let reset = "\u{001B}[0m"
+    }
+    
+    // MARK: - Status Symbols
+    
+    enum StatusSymbol {
+        static let decoded = "✔"
+        static let opaque = "◻"
+        static let warning = "⚠"
+        static let cryptographic = "🔒"
     }
 }
