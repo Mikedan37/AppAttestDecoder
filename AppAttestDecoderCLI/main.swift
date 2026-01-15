@@ -36,6 +36,7 @@ let optNoColor = options.contains("--no-color") || options.contains("--no-colour
 let optVersion = options.contains("--version") || options.contains("-V")
 let optForensic = options.contains("--forensic")
 let optBoth = options.contains("--both")
+let optFull = options.contains("--full")
 
 // Context annotation flags (for research)
 func getContext(from args: [String]) -> AttestationContext? {
@@ -99,7 +100,7 @@ case "pretty":
     let b64 = readBase64Input(args: args)
     let colorized = !optNoColor && isTTY()
     if optForensic {
-        forensicPrintAttestation(base64: b64, json: optJSON, raw: optRaw, both: optBoth, colorized: colorized)
+        forensicPrintAttestation(base64: b64, json: optJSON, raw: optRaw, both: optBoth, full: optFull, colorized: colorized)
     } else {
         prettyPrintAttestation(base64: b64, verbose: optVerbose, colorized: colorized)
     }
@@ -259,7 +260,7 @@ func decodeAttestation(_ data: Data) {
 ///   echo "BASE64_BLOB" | ./AppAttestDecoderCLI pretty
 ///   cat attestation.txt | ./AppAttestDecoderCLI pretty
 ///   ./AppAttestDecoderCLI pretty --base64 "BLOB" --no-color  # Disable colors
-func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool, colorized: Bool) {
+func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool, full: Bool, colorized: Bool) {
     func printError(_ message: String) {
         let data = (message + "\n").data(using: .utf8)!
         FileHandle.standardError.write(data)
@@ -293,11 +294,16 @@ func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool,
         
         if json {
             // JSON export mode
-            let jsonMode = ForensicMode(showRaw: false, showDecoded: false, showJSON: true, colorized: false)
+            let jsonMode = ForensicMode(showRaw: false, showDecoded: false, showJSON: true, colorized: false, fullTranscript: false)
             let output = attestation.forensicPrint(mode: jsonMode)
             print(output)
+        } else if full {
+            // Full transcript mode (linear narrative)
+            let fullMode = ForensicMode(showRaw: true, showDecoded: true, showJSON: false, colorized: colorized, fullTranscript: true)
+            let output = attestation.forensicPrint(mode: fullMode)
+            print(output)
         } else {
-            // Human-readable forensic output
+            // Human-readable forensic output (tree structure)
             let mode: ForensicMode
             if both {
                 mode = .both
@@ -307,7 +313,7 @@ func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool,
                 mode = .decoded
             }
             
-            let forensicMode = ForensicMode(showRaw: mode.showRaw, showDecoded: mode.showDecoded, showJSON: false, colorized: colorized)
+            let forensicMode = ForensicMode(showRaw: mode.showRaw, showDecoded: mode.showDecoded, showJSON: false, colorized: colorized, fullTranscript: false)
             let output = attestation.forensicPrint(mode: forensicMode)
             print(output)
         }

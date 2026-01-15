@@ -16,18 +16,21 @@ public struct ForensicMode {
     public let showDecoded: Bool
     public let showJSON: Bool
     public let colorized: Bool
+    public let fullTranscript: Bool
     
-    public init(showRaw: Bool = true, showDecoded: Bool = true, showJSON: Bool = false, colorized: Bool = false) {
+    public init(showRaw: Bool = true, showDecoded: Bool = true, showJSON: Bool = false, colorized: Bool = false, fullTranscript: Bool = false) {
         self.showRaw = showRaw
         self.showDecoded = showDecoded
         self.showJSON = showJSON
         self.colorized = colorized
+        self.fullTranscript = fullTranscript
     }
     
-    public static let both = ForensicMode(showRaw: true, showDecoded: true, showJSON: false, colorized: false)
-    public static let raw = ForensicMode(showRaw: true, showDecoded: false, showJSON: false, colorized: false)
-    public static let decoded = ForensicMode(showRaw: false, showDecoded: true, showJSON: false, colorized: false)
-    public static let json = ForensicMode(showRaw: false, showDecoded: false, showJSON: true, colorized: false)
+    public static let both = ForensicMode(showRaw: true, showDecoded: true, showJSON: false, colorized: false, fullTranscript: false)
+    public static let raw = ForensicMode(showRaw: true, showDecoded: false, showJSON: false, colorized: false, fullTranscript: false)
+    public static let decoded = ForensicMode(showRaw: false, showDecoded: true, showJSON: false, colorized: false, fullTranscript: false)
+    public static let json = ForensicMode(showRaw: false, showDecoded: false, showJSON: true, colorized: false, fullTranscript: false)
+    public static let full = ForensicMode(showRaw: true, showDecoded: true, showJSON: false, colorized: false, fullTranscript: true)
 }
 
 /// Forensic-grade printer for App Attest artifacts
@@ -159,7 +162,12 @@ extension AttestationObject {
             }
         }
         
-        // Human-readable output
+        // Full transcript mode (linear narrative)
+        if mode.fullTranscript {
+            return forensicPrintTranscript(colorized: mode.colorized)
+        }
+        
+        // Human-readable output (tree structure)
         var printer = ForensicPrinter(mode: mode)
         var output = ""
         
@@ -189,6 +197,307 @@ extension AttestationObject {
         output += printer.closeContainer()
         
         return output
+    }
+    
+    /// Full transcript mode: linear narrative format
+    private func forensicPrintTranscript(colorized: Bool) -> String {
+        var transcript = ForensicTranscriptPrinter(colorized: colorized)
+        var output = ""
+        
+        // 1. Header (orientation)
+        output += transcript.sectionHeader("APP ATTEST FORENSIC TRANSCRIPT")
+        
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let decodedAt = dateFormatter.string(from: Date())
+        
+        if let rawData = rawData {
+            output += transcript.field(name: "CBOR length", value: "\(rawData.count) bytes")
+        }
+        output += transcript.field(name: "Decoded at", value: decodedAt)
+        output += transcript.field(name: "Tool mode", value: "forensic/full")
+        output += transcript.field(name: "Format", value: format)
+        output += "\n"
+        
+        // 2. Raw CBOR (all of it)
+        if let rawData = rawData {
+            output += transcript.rawDataBlock(title: "CBOR RAW PAYLOAD", data: rawData, encoding: "CBOR")
+        }
+        
+        // 3. Structural walkthrough
+        output += transcript.sectionHeader("CBOR STRUCTURE WALKTHROUGH")
+        output += "Map (2 entries):\n\n"
+        output += "1. \"authenticatorData\"\n"
+        output += "   Raw length: \(authenticatorData.rawData.count) bytes\n"
+        output += "   Encoding: WebAuthn Authenticator Data\n\n"
+        
+        // Authenticator Data - Raw
+        output += transcript.rawDataBlock(title: "AUTHENTICATOR DATA — RAW", data: authenticatorData.rawData, encoding: "WebAuthn Authenticator Data")
+        
+        // Authenticator Data - Decoded
+        output += transcript.subsectionHeader("AUTHENTICATOR DATA — DECODED")
+        
+        output += transcript.fieldWithRaw(
+            name: "rpIdHash",
+            decoded: "SHA-256(bundleID)",
+            raw: authenticatorData.rpIdHash,
+            encoding: "SHA256"
+        )
+        
+        output += transcript.field(name: "flags", value: "0x\(String(format: "%02x", authenticatorData.flags.rawValue)) (\(authenticatorData.flags.rawValue))")
+        output += transcript.field(name: "  userPresent", value: "\(authenticatorData.flags.userPresent)", indent: 2)
+        output += transcript.field(name: "  userVerified", value: "\(authenticatorData.flags.userVerified)", indent: 2)
+        output += transcript.field(name: "  attestedCredentialData", value: "\(authenticatorData.flags.attestedCredentialData)", indent: 2)
+        output += transcript.field(name: "  extensionsIncluded", value: "\(authenticatorData.flags.extensionsIncluded)", indent: 2)
+        
+        output += transcript.field(name: "signCount", value: "\(authenticatorData.signCount)")
+        
+        // Attested Credential Data
+        if let credData = authenticatorData.attestedCredentialData {
+            output += transcript.subsectionHeader("ATTESTED CREDENTIAL DATA")
+            
+            output += transcript.rawDataBlock(title: "AAGUID", data: credData.aaguid, encoding: "UUID")
+            
+            output += transcript.rawDataBlock(title: "CREDENTIAL ID", data: credData.credentialId, encoding: "byte string")
+            
+            // Credential Public Key (CBOR)
+            output += transcript.subsectionHeader("CREDENTIAL PUBLIC KEY")
+            output += "Encoding: COSE_Key (CBOR)\n"
+            output += transcriptPrintCBORValue(credData.credentialPublicKey, transcript: &transcript, indent: 0)
+        }
+        
+        // Extensions
+        if let extensions = authenticatorData.extensions {
+            output += transcript.subsectionHeader("EXTENSIONS")
+            output += transcriptPrintCBORValue(extensions, transcript: &transcript, indent: 0)
+        }
+        
+        // Attestation Statement
+        output += transcript.sectionHeader("ATTESTATION STATEMENT")
+        
+        output += "2. \"attestationStatement\"\n"
+        output += "   Format: \(format)\n\n"
+        
+        if let alg = attestationStatement.alg {
+            output += transcript.field(name: "Algorithm", value: "\(alg) (ES256)")
+            output += transcript.field(name: "  COSE alg", value: "\(alg)", indent: 2)
+            output += transcript.field(name: "  Meaning", value: "ES256", indent: 2)
+        } else {
+            output += transcript.field(name: "Algorithm", value: "nil")
+        }
+        
+        if !attestationStatement.signature.isEmpty {
+            output += transcript.rawDataBlock(title: "SIGNATURE", data: attestationStatement.signature, encoding: "ECDSA")
+            output += transcript.field(name: "Status", value: "[OPAQUE] (not interpreted)")
+        } else {
+            output += transcript.field(name: "Signature", value: "empty")
+        }
+        
+        // Certificate Chain
+        if !attestationStatement.x5c.isEmpty {
+            output += transcript.sectionHeader("CERTIFICATE CHAIN")
+            
+            for (index, certDER) in attestationStatement.x5c.enumerated() {
+                let role = index == 0 ? "Leaf" : index == attestationStatement.x5c.count - 1 ? "Root" : "Intermediate"
+                output += transcript.subsectionHeader("Certificate [\(index)] — \(role)")
+                
+                output += transcript.field(name: "DER length", value: "\(certDER.count) bytes")
+                output += "\n"
+                
+                // Raw DER
+                output += transcript.rawDataBlock(title: "RAW DER", data: certDER, encoding: "DER")
+                
+                // Parsed certificate
+                if let cert = try? X509Certificate.parse(der: certDER) {
+                    output += transcript.subsectionHeader("TBSCertificate")
+                    
+                    let subjectStr = cert.subject.attributes.first(where: { $0.oid == "2.5.4.3" })?.value ?? cert.subject.description
+                    output += transcript.field(name: "Subject", value: subjectStr)
+                    
+                    let issuerStr = cert.issuer.attributes.first(where: { $0.oid == "2.5.4.3" })?.value ?? cert.issuer.description
+                    output += transcript.field(name: "Issuer", value: issuerStr)
+                    
+                    if !cert.serialNumber.isEmpty {
+                        output += transcript.fieldWithRaw(
+                            name: "Serial Number",
+                            decoded: "\(cert.serialNumber.map { String(format: "%02x", $0) }.joined())",
+                            raw: cert.serialNumber,
+                            encoding: "integer"
+                        )
+                    }
+                    
+                    output += transcript.field(name: "Validity", value: "")
+                    let formatter = ISO8601DateFormatter()
+                    output += transcript.field(name: "  Not Before", value: formatter.string(from: cert.validity.notBefore), indent: 2)
+                    output += transcript.field(name: "  Not After", value: formatter.string(from: cert.validity.notAfter), indent: 2)
+                    
+                    // Extensions
+                    let decodedExts = cert.decodedExtensions
+                    if !decodedExts.isEmpty {
+                        output += transcript.subsectionHeader("Extensions")
+                        
+                        for (oid, ext) in decodedExts.sorted(by: { $0.key < $1.key }) {
+                            let extName = X509OID.name(for: oid)
+                            output += transcript.field(name: "OID", value: oid)
+                            output += transcript.field(name: "Name", value: extName)
+                            
+                            if let rawDER = cert.extensions[oid] {
+                                output += transcript.rawDataBlock(title: "Raw DER", data: rawDER, encoding: "DER")
+                            }
+                            
+                            // Decoded value
+                            output += transcript.field(name: "Decoded", value: "")
+                            switch ext {
+                            case .basicConstraints(let isCA, let pathLength):
+                                output += transcript.field(name: "  isCA", value: "\(isCA)", indent: 2)
+                                if let pathLength = pathLength {
+                                    output += transcript.field(name: "  pathLengthConstraint", value: "\(pathLength)", indent: 2)
+                                }
+                            case .keyUsage(let usages):
+                                let usageNames = usages.map { $0.name }.joined(separator: ", ")
+                                output += transcript.field(name: "  usages", value: usageNames, indent: 2)
+                            case .extendedKeyUsage(let usages):
+                                let usageNames = usages.map { $0.name }.joined(separator: ", ")
+                                output += transcript.field(name: "  usages", value: usageNames, indent: 2)
+                            case .appleOID(_, let appleExt):
+                                output += transcriptPrintAppleExtension(appleExt, transcript: &transcript, indent: 2)
+                            case .unknown(_, let raw):
+                                output += transcript.field(name: "  [OPAQUE]", value: "Unknown extension", indent: 2)
+                                output += transcript.rawDataBlock(title: "Raw Value", data: raw, encoding: "DER")
+                            }
+                            output += "\n"
+                        }
+                    }
+                } else {
+                    output += transcript.field(name: "Parse Error", value: "Failed to parse certificate")
+                }
+                
+                output += "\n"
+            }
+        }
+        
+        // Receipt (if present in rawCBOR)
+        if case .map(let mapPairs) = attestationStatement.rawCBOR,
+           let receiptValue = mapPairs.first(where: { key, _ in
+               if case .textString("receipt") = key { return true }
+               return false
+           })?.1,
+           case .byteString(let receiptData) = receiptValue {
+            output += transcript.sectionHeader("RECEIPT")
+            output += transcript.rawDataBlock(title: "RECEIPT RAW", data: receiptData, encoding: "CBOR")
+        }
+        
+        return output
+    }
+    
+    private func transcriptPrintCBORValue(_ value: CBORValue, transcript: inout ForensicTranscriptPrinter, indent: Int) -> String {
+        var output = ""
+        
+        switch value {
+        case .unsigned(let u):
+            output += transcript.field(name: "type", value: "unsigned", indent: indent)
+            output += transcript.field(name: "value", value: "\(u)", indent: indent)
+        case .negative(let n):
+            output += transcript.field(name: "type", value: "negative", indent: indent)
+            output += transcript.field(name: "value", value: "\(n)", indent: indent)
+        case .byteString(let data):
+            output += transcript.field(name: "type", value: "byteString", indent: indent)
+            if data.count > 0 {
+                output += transcript.rawDataBlock(title: "value", data: data, encoding: "byte string")
+            } else {
+                output += transcript.field(name: "value", value: "empty", indent: indent)
+            }
+        case .textString(let s):
+            output += transcript.field(name: "type", value: "textString", indent: indent)
+            output += transcript.field(name: "value", value: "\"\(s)\"", indent: indent)
+        case .array(let arr):
+            output += transcript.field(name: "type", value: "array", indent: indent)
+            output += transcript.field(name: "length", value: "\(arr.count)", indent: indent)
+            for (index, elem) in arr.enumerated() {
+                output += transcript.field(name: "[\(index)]", value: "", indent: indent)
+                output += transcriptPrintCBORValue(elem, transcript: &transcript, indent: indent + 2)
+            }
+        case .map(let pairs):
+            output += transcript.field(name: "type", value: "map", indent: indent)
+            output += transcript.field(name: "length", value: "\(pairs.count)", indent: indent)
+            for (key, val) in pairs {
+                let keyStr = keyDescription(key)
+                output += transcript.field(name: keyStr, value: "", indent: indent)
+                output += transcriptPrintCBORValue(val, transcript: &transcript, indent: indent + 2)
+            }
+        case .tagged(let tag, let inner):
+            output += transcript.field(name: "type", value: "tagged", indent: indent)
+            output += transcript.field(name: "tag", value: "\(tag)", indent: indent)
+            output += transcript.field(name: "value", value: "", indent: indent)
+            output += transcriptPrintCBORValue(inner, transcript: &transcript, indent: indent + 2)
+        case .simple(let u):
+            output += transcript.field(name: "type", value: "simple", indent: indent)
+            output += transcript.field(name: "value", value: "\(u)", indent: indent)
+        case .boolean(let b):
+            output += transcript.field(name: "type", value: "boolean", indent: indent)
+            output += transcript.field(name: "value", value: "\(b)", indent: indent)
+        case .null:
+            output += transcript.field(name: "type", value: "null", indent: indent)
+        case .undefined:
+            output += transcript.field(name: "type", value: "undefined", indent: indent)
+        }
+        
+        return output
+    }
+    
+    private func transcriptPrintAppleExtension(_ appleExt: AppleAppAttestExtension, transcript: inout ForensicTranscriptPrinter, indent: Int) -> String {
+        var output = ""
+        
+        switch appleExt.type {
+        case .challenge(let hash):
+            output += transcript.field(name: "type", value: "challenge", indent: indent)
+            output += transcript.fieldWithRaw(name: "hash", decoded: "SHA-256", raw: hash, encoding: "SHA256", indent: indent)
+        case .receipt(let receipt):
+            output += transcript.field(name: "type", value: "receipt", indent: indent)
+            if let bundleID = receipt.bundleID {
+                output += transcript.field(name: "bundleID", value: bundleID, indent: indent)
+            }
+            if let teamID = receipt.teamID {
+                output += transcript.field(name: "teamID", value: teamID, indent: indent)
+            }
+            if let appVersion = receipt.appVersion {
+                output += transcript.field(name: "appVersion", value: appVersion, indent: indent)
+            }
+            if let creationDate = receipt.receiptCreationDate {
+                let formatter = ISO8601DateFormatter()
+                output += transcript.field(name: "receiptCreationDate", value: formatter.string(from: creationDate), indent: indent)
+            }
+            if let expirationDate = receipt.receiptExpirationDate {
+                let formatter = ISO8601DateFormatter()
+                output += transcript.field(name: "receiptExpirationDate", value: formatter.string(from: expirationDate), indent: indent)
+            }
+        case .keyPurpose(let purpose):
+            output += transcript.field(name: "type", value: "keyPurpose", indent: indent)
+            output += transcript.field(name: "purpose", value: purpose, indent: indent)
+        case .environment(let env):
+            output += transcript.field(name: "type", value: "environment", indent: indent)
+            output += transcript.field(name: "value", value: env, indent: indent)
+        case .osVersion(let version):
+            output += transcript.field(name: "type", value: "osVersion", indent: indent)
+            output += transcript.field(name: "value", value: version, indent: indent)
+        case .deviceClass(let deviceClass):
+            output += transcript.field(name: "type", value: "deviceClass", indent: indent)
+            output += transcript.field(name: "value", value: deviceClass, indent: indent)
+        case .unknown(_, let raw):
+            output += transcript.field(name: "type", value: "unknown", indent: indent)
+            output += transcript.rawDataBlock(title: "Raw Value", data: raw, encoding: "DER")
+        }
+        
+        return output
+    }
+    
+    private func keyDescription(_ key: CBORValue) -> String {
+        switch key {
+        case .textString(let s): return "\"\(s)\""
+        case .unsigned(let u): return "\(u)"
+        case .negative(let n): return "\(n)"
+        default: return "\(key)"
+        }
     }
     
     private func forensicPrintAuthenticatorData(_ authData: AuthenticatorData, printer: inout ForensicPrinter) -> String {
@@ -504,14 +813,6 @@ extension AttestationObject {
         return output
     }
     
-    private func keyDescription(_ key: CBORValue) -> String {
-        switch key {
-        case .textString(let s): return "\"\(s)\""
-        case .unsigned(let u): return "\(u)"
-        case .negative(let n): return "\(n)"
-        default: return "\(key)"
-        }
-    }
 }
 
 // Note: CBOR encoding is not implemented
