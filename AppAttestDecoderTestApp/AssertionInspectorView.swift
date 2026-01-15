@@ -260,4 +260,101 @@ struct AssertionInspectorView: View {
     private func copyBase64() {
         UIPasteboard.general.string = base64Assertion
     }
+    
+    // MARK: - Lossless Tree Helpers
+    
+    private func dumpCBORValueForDisplay(_ value: CBORValue, path: String, indent: Int) -> String {
+        let indentStr = String(repeating: " ", count: indent)
+        var output = ""
+        
+        switch value {
+        case .unsigned(let u):
+            output += "\(indentStr)\(path): unsigned(\(u))\n"
+        case .negative(let n):
+            output += "\(indentStr)\(path): negative(\(n))\n"
+        case .byteString(let data):
+            output += "\(indentStr)\(path): byteString(\(data.count) bytes)\n"
+            if data.count <= 64 {
+                output += "\(indentStr)  hex: \(data.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+            } else {
+                let preview = data.prefix(32)
+                output += "\(indentStr)  hex (first 32): \(preview.map { String(format: "%02x", $0) }.joined(separator: " "))...\n"
+            }
+        case .utf8String(let str):
+            output += "\(indentStr)\(path): utf8String(\"\(str)\")\n"
+        case .array(let items):
+            output += "\(indentStr)\(path): array(\(items.count) items)\n"
+            for (index, item) in items.enumerated() {
+                output += dumpCBORValueForDisplay(item, path: "\(path)[\(index)]", indent: indent + 2)
+            }
+        case .map(let map):
+            output += "\(indentStr)\(path): map(\(map.count) pairs)\n"
+            for (key, value) in map.sorted(by: { "\($0.key)" < "\($1.key)" }) {
+                let keyPath = "\(path).\(key)"
+                output += dumpCBORValueForDisplay(value, path: keyPath, indent: indent + 2)
+            }
+        case .tagged(let tag, let value):
+            output += "\(indentStr)\(path): tagged(\(tag), ...)\n"
+            output += dumpCBORValueForDisplay(value, path: "\(path).value", indent: indent + 2)
+        case .simple(let simple):
+            output += "\(indentStr)\(path): simple(\(simple))\n"
+        case .floatingPoint(let fp):
+            output += "\(indentStr)\(path): floatingPoint(\(fp))\n"
+        case .boolean(let b):
+            output += "\(indentStr)\(path): boolean(\(b))\n"
+        case .null:
+            output += "\(indentStr)\(path): null\n"
+        case .undefined:
+            output += "\(indentStr)\(path): undefined\n"
+        }
+        
+        return output
+    }
+    
+    private func dumpAuthenticatorDataForDisplay(_ authData: AuthenticatorData, indent: Int) -> String {
+        let indentStr = String(repeating: " ", count: indent)
+        var output = ""
+        
+        output += "\(indentStr)rpIdHash: \(authData.rpIdHash.map { String(format: "%02x", $0) }.joined(separator: " ")) (32 bytes)\n"
+        output += "\(indentStr)flags: 0x\(String(format: "%02x", authData.flags.rawValue))\n"
+        output += "\(indentStr)  userPresent: \(authData.flags.userPresent)\n"
+        output += "\(indentStr)  userVerified: \(authData.flags.userVerified)\n"
+        output += "\(indentStr)  attestedCredentialData: \(authData.flags.attestedCredentialData)\n"
+        output += "\(indentStr)  extensionsIncluded: \(authData.flags.extensionsIncluded)\n"
+        output += "\(indentStr)signCount: \(authData.signCount)\n"
+        output += "\(indentStr)rawData: \(authData.rawData.count) bytes\n"
+        
+        return output
+    }
+    
+    private func dumpCOSESign1ForDisplay(_ sign1: COSESign1, indent: Int) -> String {
+        let indentStr = String(repeating: " ", count: indent)
+        var output = ""
+        
+        output += "\(indentStr)protectedHeader:\n"
+        if let alg = sign1.protectedHeader.algorithm {
+            output += "\(indentStr)  algorithm: \(alg.rawValue)\n"
+        }
+        if let kid = sign1.protectedHeader.keyID {
+            output += "\(indentStr)  keyID: \(kid.map { String(format: "%02x", $0) }.joined(separator: " ")) (\(kid.count) bytes)\n"
+        }
+        if !sign1.protectedHeader.x5c.isEmpty {
+            output += "\(indentStr)  x5c: array(\(sign1.protectedHeader.x5c.count) certificates)\n"
+            for (index, cert) in sign1.protectedHeader.x5c.enumerated() {
+                output += "\(indentStr)    [\(index)]: \(cert.count) bytes\n"
+            }
+        }
+        
+        output += "\(indentStr)unprotectedHeader: (empty)\n"
+        
+        if let payload = sign1.payload {
+            output += "\(indentStr)payload: \(payload.count) bytes\n"
+        } else {
+            output += "\(indentStr)payload: null\n"
+        }
+        
+        output += "\(indentStr)signature: \(sign1.signature.map { String(format: "%02x", $0) }.joined(separator: " ")) (\(sign1.signature.count) bytes)\n"
+        
+        return output
+    }
 }
