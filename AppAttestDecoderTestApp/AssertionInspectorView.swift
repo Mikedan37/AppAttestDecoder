@@ -163,8 +163,8 @@ struct AssertionInspectorView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 40)
                 }
-                .padding()
             }
+            .padding()
             .navigationTitle("Assertion Inspector")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
