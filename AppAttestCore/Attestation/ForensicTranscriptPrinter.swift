@@ -22,38 +22,62 @@ struct ForensicTranscriptPrinter {
     
     // MARK: - Section Headers
     
+    // MARK: - Box Drawing
+    
+    func boxedSection(_ title: String, content: String) -> String {
+        let width = 60
+        let titleWithDashes = "─ \(title) "
+        let dashesNeeded = max(0, width - titleWithDashes.count - 1)
+        let topBorder = "┌" + titleWithDashes + String(repeating: "─", count: dashesNeeded) + "┐"
+        let bottomBorder = "└" + String(repeating: "─", count: width) + "┘"
+        
+        let header = colorized ? "\(ANSIColor.header)\(topBorder)\(ANSIColor.reset)" : topBorder
+        let footer = colorized ? "\(ANSIColor.header)\(bottomBorder)\(ANSIColor.reset)" : bottomBorder
+        
+        // Wrap content lines in box
+        let contentLines = content.components(separatedBy: "\n").filter { !$0.isEmpty }
+        var boxedContent = ""
+        for line in contentLines {
+            // Trim trailing newline from line if present
+            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedLine.isEmpty {
+                let paddedLine = "│ " + trimmedLine.padding(toLength: width - 2, withPad: " ", startingAt: 0) + " │"
+                boxedContent += paddedLine + "\n"
+            }
+        }
+        
+        return "\n\(header)\n\(boxedContent)\(footer)\n"
+    }
+    
     func sectionHeader(_ title: String) -> String {
-        let separator = String(repeating: "=", count: max(title.count, 50))
         if colorized {
-            return "\n\(ANSIColor.header)\(title)\(ANSIColor.reset)\n\(ANSIColor.separator)\(separator)\(ANSIColor.reset)\n\n"
+            return "\n\(ANSIColor.header)\(title)\(ANSIColor.reset)\n\n"
         } else {
-            return "\n\(title)\n\(separator)\n\n"
+            return "\n\(title)\n\n"
         }
     }
     
     func subsectionHeader(_ title: String) -> String {
-        let separator = String(repeating: "-", count: title.count)
         if colorized {
-            return "\n\(ANSIColor.subheader)\(title)\(ANSIColor.reset)\n\(separator)\n\n"
+            return "\n\(ANSIColor.header)\(title)\(ANSIColor.reset)\n"
         } else {
-            return "\n\(title)\n\(separator)\n\n"
-        }
-    }
-    
-    func summaryHeader(_ title: String) -> String {
-        let separator = String(repeating: "=", count: max(title.count, 50))
-        if colorized {
-            return "\n\(ANSIColor.summaryHeader)\(separator)\(ANSIColor.reset)\n\(ANSIColor.summaryHeader)\(title)\(ANSIColor.reset)\n\(ANSIColor.summaryHeader)\(separator)\(ANSIColor.reset)\n\n"
-        } else {
-            return "\n\(separator)\n\(title)\n\(separator)\n\n"
+            return "\n\(title)\n"
         }
     }
     
     func sectionTitle(_ title: String, symbol: String = "▶") -> String {
         if colorized {
-            return "\n\(ANSIColor.sectionTitle)\(symbol) \(title)\(ANSIColor.reset)\n"
+            return "\n\(ANSIColor.header)\(symbol) \(title)\(ANSIColor.reset)\n"
         } else {
             return "\n\(symbol) \(title)\n"
+        }
+    }
+    
+    func summaryHeader(_ title: String) -> String {
+        if colorized {
+            return "\n\(ANSIColor.header)\(title)\(ANSIColor.reset)\n\n"
+        } else {
+            return "\n\(title)\n\n"
         }
     }
     
@@ -92,6 +116,15 @@ struct ForensicTranscriptPrinter {
         return output
     }
     
+    // MARK: - Two-Column Format
+    
+    func twoColumnField(key: String, value: String, keyWidth: Int = 20) -> String {
+        let keyUpper = key.uppercased()
+        let paddedKey = keyUpper.padding(toLength: keyWidth, withPad: " ", startingAt: 0)
+        let nameFormatted = colorized ? "\(ANSIColor.fieldName)\(paddedKey)\(ANSIColor.reset)" : paddedKey
+        return "\(nameFormatted) \(value)\n"
+    }
+    
     // MARK: - Decoded Fields
     
     func field(name: String, value: String, indent: Int = 0, symbol: String? = nil) -> String {
@@ -104,8 +137,7 @@ struct ForensicTranscriptPrinter {
     func fieldWithContext(name: String, value: String, context: String, indent: Int = 0) -> String {
         let indentStr = String(repeating: " ", count: indent)
         let nameFormatted = colorized ? "\(ANSIColor.fieldName)\(name)\(ANSIColor.reset)" : name
-        let contextFormatted = colorized ? "\(ANSIColor.context)(\(context))\(ANSIColor.reset)" : "(\(context))"
-        return "\(indentStr)\(nameFormatted) \(contextFormatted): \(value)\n"
+        return "\(indentStr)\(nameFormatted) (\(context)): \(value)\n"
     }
     
     func fieldWithRaw(name: String, decoded: String, raw: Data, encoding: String? = nil, indent: Int = 0, showRaw: Bool = false) -> String {
@@ -163,19 +195,13 @@ struct ForensicTranscriptPrinter {
         return data.base64EncodedString()
     }
     
-    // MARK: - ANSI Colors
+    // MARK: - ANSI Colors (4-color professional palette)
     
     enum ANSIColor {
-        static let summaryHeader = "\u{001B}[1;33m"    // Bold yellow (prominent)
-        static let header = "\u{001B}[1;36m"          // Bold cyan
-        static let subheader = "\u{001B}[1;33m"       // Bold yellow
-        static let sectionTitle = "\u{001B}[1;32m"     // Bold green
-        static let fieldName = "\u{001B}[36m"          // Cyan
-        static let context = "\u{001B}[90m"             // Dark gray (for context)
-        static let rawLabel = "\u{001B}[2;90m"          // Dim gray (de-emphasized)
-        static let separator = "\u{001B}[90m"           // Dark gray
-        static let decoded = "\u{001B}[32m"             // Green (decoded values)
-        static let reset = "\u{001B}[0m"
+        static let header = "\u{001B}[1;37m"      // Bold white (headers)
+        static let fieldName = "\u{001B}[36m"     // Cyan (keys)
+        static let rawLabel = "\u{001B}[2;90m"    // Dim gray (raw/opaque)
+        static let reset = "\u{001B}[0m"          // Reset
     }
     
     // MARK: - Status Symbols

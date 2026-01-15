@@ -218,11 +218,11 @@ extension AttestationObject {
         // 1. Prominent Header
         output += transcript.summaryHeader("APPLE APP ATTEST — FORENSIC REPORT")
         
-        // Summary (quick orientation) - FIRST, most prominent
-        output += "Summary:\n"
+        // Summary (two-column format)
+        var summaryContent = ""
         
         // Format
-        output += transcript.field(name: "  Format", value: format, indent: 2)
+        summaryContent += transcript.twoColumnField(key: "FORMAT", value: format)
         
         // Certificate chain
         let chainLength = attestationStatement.x5c.count
@@ -236,17 +236,17 @@ extension AttestationObject {
                 chainStructure = "leaf → \(chainLength - 2) intermediate(s) → root"
             }
         }
-        output += transcript.field(name: "  Certificate Chain", value: "\(chainLength) certificate\(chainLength == 1 ? "" : "s") (\(chainStructure))", indent: 2)
+        summaryContent += transcript.twoColumnField(key: "CERTIFICATE CHAIN", value: "\(chainLength) certs (\(chainStructure))")
         
         // Receipt
         let receiptPresent = (attestationStatement.rawCBOR.mapValue?.first(where: { key, _ in
             if case .textString("receipt") = key { return true }
             return false
         }) != nil)
-        output += transcript.field(name: "  Receipt Present", value: receiptPresent ? "yes" : "no", indent: 2)
+        summaryContent += transcript.twoColumnField(key: "RECEIPT PRESENT", value: receiptPresent ? "yes" : "no")
         
         // Attested credential
-        output += transcript.field(name: "  Attested Credential", value: authenticatorData.attestedCredentialData != nil ? "present" : "absent", indent: 2)
+        summaryContent += transcript.twoColumnField(key: "ATTESTED CREDENTIAL", value: authenticatorData.attestedCredentialData != nil ? "present" : "absent")
         
         // Environment (if decodable)
         var environment: String? = nil
@@ -269,48 +269,36 @@ extension AttestationObject {
             }
         }
         if let env = environment {
-            output += transcript.field(name: "  Environment", value: env, indent: 2)
+            summaryContent += transcript.twoColumnField(key: "ENVIRONMENT", value: "\(env) (from extension)")
         } else {
-            output += transcript.field(name: "  Environment", value: "not decodable (see extensions)", indent: 2)
+            summaryContent += transcript.twoColumnField(key: "ENVIRONMENT", value: "not decodable (see extensions)")
         }
         
         // Extensions summary
         let totalExtCount = decodedExtCount + opaqueExtCount
         if totalExtCount > 0 {
-            output += transcript.field(name: "  Extensions", value: "\(totalExtCount) total (\(decodedExtCount) decoded, \(opaqueExtCount) opaque)", indent: 2)
+            summaryContent += transcript.twoColumnField(key: "EXTENSIONS", value: "\(totalExtCount) total (\(decodedExtCount) decoded, \(opaqueExtCount) opaque)")
         }
         
-        output += "\n"
+        output += transcript.boxedSection("SUMMARY", content: summaryContent)
         
         // 2. DECODED SECTIONS (Summary → Decoded → Raw hierarchy)
         
-        // Authenticator Data
-        output += transcript.sectionTitle("Authenticator Data")
-        
-        // Summary first
-        output += "  Summary:\n"
-        output += transcript.field(name: "    RP ID Hash", value: "SHA256(\(format))", indent: 4)
-        output += transcript.field(name: "    Flags", value: "0x\(String(format: "%02x", authenticatorData.flags.rawValue))", indent: 4)
-        output += transcript.bulletPoint("User Present: \(authenticatorData.flags.userPresent)", indent: 6)
-        output += transcript.bulletPoint("User Verified: \(authenticatorData.flags.userVerified)", indent: 6)
-        output += transcript.bulletPoint("Attested Credential Data: \(authenticatorData.flags.attestedCredentialData)", indent: 6)
-        output += transcript.bulletPoint("Extensions Included: \(authenticatorData.flags.extensionsIncluded)", indent: 6)
+        // Authenticator Data (boxed section)
+        var authDataContent = ""
+        let flagsDesc = authenticatorData.flags.attestedCredentialData ? "ACD" : ""
+        authDataContent += transcript.twoColumnField(key: "RP ID HASH", value: "SHA256(\(format))")
+        authDataContent += transcript.twoColumnField(key: "FLAGS", value: "0x\(String(format: "%02x", authenticatorData.flags.rawValue)) (\(flagsDesc))")
+        authDataContent += transcript.twoColumnField(key: "USER PRESENT", value: "\(authenticatorData.flags.userPresent)")
+        authDataContent += transcript.twoColumnField(key: "USER VERIFIED", value: "\(authenticatorData.flags.userVerified)")
+        authDataContent += transcript.twoColumnField(key: "ATTESTED CREDENTIAL", value: "\(authenticatorData.flags.attestedCredentialData)")
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = ","
         let signCountFormatted = formatter.string(from: NSNumber(value: authenticatorData.signCount)) ?? "\(authenticatorData.signCount)"
-        output += transcript.fieldWithContext(name: "    Sign Count", value: signCountFormatted, context: "anti-replay counter", indent: 4)
+        authDataContent += transcript.twoColumnField(key: "SIGN COUNT", value: "\(signCountFormatted) (anti-replay counter)")
         
-        // Decoded Fields
-        output += "\n  Decoded Fields:\n"
-        let rpIdHashHex = authenticatorData.rpIdHash.map { String(format: "%02x", $0) }.joined(separator: " ")
-        output += transcript.fieldWithRaw(name: "    RP ID Hash", decoded: rpIdHashHex, raw: authenticatorData.rpIdHash, encoding: "SHA256", indent: 4, showRaw: false)
-        output += transcript.field(name: "    Flags byte", value: "0x\(String(format: "%02x", authenticatorData.flags.rawValue))", indent: 4)
-        output += transcript.field(name: "    Extensions", value: authenticatorData.extensions != nil ? "present" : "none", indent: 4)
-        
-        // Raw Bytes (collapsed)
-        output += "\n  Raw Bytes:\n"
-        output += transcript.rawDataBlock(title: "Authenticator Data", data: authenticatorData.rawData, encoding: "WebAuthn Authenticator Data", collapsed: true)
+        output += transcript.boxedSection("AUTHENTICATOR DATA", content: authDataContent)
         
         // Attested Credential Data
         if let credData = authenticatorData.attestedCredentialData {
@@ -320,10 +308,48 @@ extension AttestationObject {
             
             output += transcript.rawDataBlock(title: "CREDENTIAL ID", data: credData.credentialId, encoding: "byte string")
             
-            // Credential Public Key (CBOR)
-            output += transcript.subsectionHeader("CREDENTIAL PUBLIC KEY")
-            output += "Encoding: COSE_Key (CBOR)\n"
-            output += transcriptPrintCBORValue(credData.credentialPublicKey, transcript: &transcript, indent: 0)
+            // Credential Public Key (COSE Key - decoded)
+            var coseKeyContent = ""
+            if case .map(let pairs) = credData.credentialPublicKey {
+                // Decode COSE key map to named fields
+                var kty: String? = nil
+                var alg: String? = nil
+                var crv: String? = nil
+                var x: Data? = nil
+                var y: Data? = nil
+                
+                for (key, value) in pairs {
+                    if case .unsigned(1) = key, case .unsigned(let ktyVal) = value {
+                        kty = ktyVal == 2 ? "EC (2)" : "\(ktyVal)"
+                    } else if case .negative(-1) = key, case .unsigned(1) = value {
+                        crv = "P-256 (1)"
+                    } else if case .negative(-2) = key, case .byteString(let xData) = value {
+                        x = xData
+                    } else if case .negative(-3) = key, case .byteString(let yData) = value {
+                        y = yData
+                    } else if case .negative(-7) = key {
+                        alg = "ES256 (-7)"
+                    } else if case .unsigned(3) = key, case .negative(-7) = value {
+                        alg = "ES256 (-7)"
+                    }
+                }
+                
+                coseKeyContent += transcript.twoColumnField(key: "kty", value: kty ?? "unknown")
+                if let alg = alg {
+                    coseKeyContent += transcript.twoColumnField(key: "alg", value: alg)
+                }
+                if let crv = crv {
+                    coseKeyContent += transcript.twoColumnField(key: "crv", value: crv)
+                }
+                if let x = x {
+                    coseKeyContent += transcript.twoColumnField(key: "x", value: "[\(x.count) bytes]")
+                }
+                if let y = y {
+                    coseKeyContent += transcript.twoColumnField(key: "y", value: "[\(y.count) bytes]")
+                }
+            }
+            
+            output += transcript.boxedSection("CREDENTIAL PUBLIC KEY", content: coseKeyContent)
         }
         
         // Extensions
