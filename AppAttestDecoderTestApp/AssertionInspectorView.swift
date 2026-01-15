@@ -37,24 +37,25 @@ struct AssertionInspectorView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 16) {
-                // Base64 Input (read-only)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Assertion Object (Base64)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    ScrollView {
-                        Text(base64Assertion)
-                            .font(.system(.caption, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Base64 Input (read-only)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Assertion Object (Base64)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        ScrollView {
+                            Text(base64Assertion)
+                                .font(.system(.caption, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(height: 100)
+                        .padding(8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
                     }
-                    .frame(height: 100)
-                    .padding(8)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-                }
                 
                 // Mode Selector
                 VStack(alignment: .leading, spacing: 6) {
@@ -126,20 +127,21 @@ struct AssertionInspectorView: View {
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .frame(maxHeight: .infinity)
+                        .frame(minHeight: 200, maxHeight: 400)
                         .padding(8)
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
                     }
                 } else if error == nil && !isDecoding {
-                    Spacer()
                     Text("Tap 'Inspect' to decode the assertion")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Spacer()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
                 }
+                }
+                .padding()
             }
-            .padding()
             .navigationTitle("Assertion Inspector")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -167,6 +169,11 @@ struct AssertionInspectorView: View {
     /// - Does NOT make trust decisions
     /// 
     /// All verification must occur on the server.
+    /// 
+    /// ERROR HANDLING PHILOSOPHY:
+    /// - Fatal errors: Invalid Base64, invalid CBOR structure
+    /// - Non-fatal errors: Valid CBOR but incomplete/context-dependent COSE envelope
+    ///   In non-fatal cases, we still provide partial inspection (raw CBOR, byte-level view)
     private func decodeAssertion() {
         error = nil
         output = ""
@@ -182,6 +189,21 @@ struct AssertionInspectorView: View {
         // Decode on background queue to avoid blocking UI
         // This is inspection work, not verification, so it's safe to do off-main-thread
         DispatchQueue.global(qos: .userInitiated).async {
+            // Step 1: Try to decode CBOR first (to distinguish fatal vs non-fatal errors)
+            let cborValue: CBORValue
+            do {
+                cborValue = try CBORDecoder.decode(data)
+            } catch {
+                // Fatal error: Invalid CBOR structure
+                let errorMessage = "Invalid CBOR structure: \(error.localizedDescription)\n\n\(error)"
+                DispatchQueue.main.async {
+                    self.error = errorMessage
+                    self.isDecoding = false
+                }
+                return
+            }
+            
+            // Step 2: Try full COSE_Sign1 decoding
             do {
                 // Structural decoding only - no verification
                 let decoder = AppAttestDecoder(teamID: nil)
@@ -208,25 +230,18 @@ struct AssertionInspectorView: View {
                     
                 case .losslessTree:
                     // Complete CBOR tree dump
-                    // For assertions, we dump the raw CBOR structure
-                    let dumper = LosslessTreeDumper(colorized: false)
-                    // Decode CBOR to get full tree structure
-                    if let cbor = try? CBORDecoder.decode(assertion.rawData) {
-                        var output = "LOSSLESS TREE DUMP - Assertion Object\n"
-                        output += "========================================\n\n"
-                        output += "CBOR STRUCTURE\n"
-                        output += "---------------\n"
-                        output += dumpCBORValueForDisplay(cbor, path: "assertionObject", indent: 0)
-                        output += "\n\nAUTHENTICATOR DATA\n"
-                        output += "------------------\n"
-                        output += dumpAuthenticatorDataForDisplay(assertion.authenticatorData, indent: 0)
-                        output += "\n\nCOSE_SIGN1 STRUCTURE\n"
-                        output += "--------------------\n"
-                        output += dumpCOSESign1ForDisplay(assertion.coseSign1, indent: 0)
-                        decodedOutput = output
-                    } else {
-                        decodedOutput = "Error: Failed to decode CBOR structure"
-                    }
+                    var output = "LOSSLESS TREE DUMP - Assertion Object\n"
+                    output += "========================================\n\n"
+                    output += "CBOR STRUCTURE\n"
+                    output += "---------------\n"
+                    output += dumpCBORValueForDisplay(cborValue, path: "assertionObject", indent: 0)
+                    output += "\n\nAUTHENTICATOR DATA\n"
+                    output += "------------------\n"
+                    output += dumpAuthenticatorDataForDisplay(assertion.authenticatorData, indent: 0)
+                    output += "\n\nCOSE_SIGN1 STRUCTURE\n"
+                    output += "--------------------\n"
+                    output += dumpCOSESign1ForDisplay(assertion.coseSign1, indent: 0)
+                    decodedOutput = output
                 }
                 
                 DispatchQueue.main.async {
@@ -234,17 +249,44 @@ struct AssertionInspectorView: View {
                     self.error = nil
                     self.isDecoding = false
                 }
-            } catch {
-                // Graceful error handling - show error as diagnostic text
-                // Do NOT crash, do NOT hide errors
-                let errorMessage = "Decode error: \(error.localizedDescription)\n\n\(error)"
+            } catch let decodeError {
+                // Non-fatal error: Valid CBOR but incomplete/context-dependent COSE envelope
+                // Provide partial inspection instead of treating as fatal error
+                let isCOSEError = decodeError is COSEError || decodeError is AssertionError
                 
-                DispatchQueue.main.async {
-                    self.error = errorMessage
-                    self.isDecoding = false
-                    // Preserve partial output if available (best-effort)
-                    if self.output.isEmpty {
-                        self.output = ""
+                if isCOSEError {
+                    // Valid CBOR but COSE structure incomplete or context-dependent
+                    // Still provide inspection: raw CBOR tree, byte-level view
+                    var partialOutput = "⚠️  Partial Decode Available\n"
+                    partialOutput += "========================================\n\n"
+                    partialOutput += "The input is valid CBOR but the COSE_Sign1 envelope is incomplete\n"
+                    partialOutput += "or context-dependent. This is not necessarily an error—assertions\n"
+                    partialOutput += "may require external context to fully decode.\n\n"
+                    partialOutput += "Raw Error: \(decodeError.localizedDescription)\n\n"
+                    partialOutput += "CBOR STRUCTURE\n"
+                    partialOutput += "---------------\n"
+                    partialOutput += dumpCBORValueForDisplay(cborValue, path: "assertionObject", indent: 0)
+                    partialOutput += "\n\nRAW BYTES\n"
+                    partialOutput += "---------\n"
+                    partialOutput += "Length: \(data.count) bytes\n"
+                    partialOutput += "Base64: \(data.base64EncodedString())\n"
+                    partialOutput += "Hex (first 64): \(data.prefix(64).map { String(format: "%02x", $0) }.joined(separator: " "))"
+                    if data.count > 64 {
+                        partialOutput += "..."
+                    }
+                    partialOutput += "\n"
+                    
+                    DispatchQueue.main.async {
+                        self.output = partialOutput
+                        self.error = "COSE envelope incomplete or context-dependent. Partial inspection available below."
+                        self.isDecoding = false
+                    }
+                } else {
+                    // Unexpected error (shouldn't happen after CBOR decode succeeds)
+                    let errorMessage = "Unexpected decode error: \(decodeError.localizedDescription)\n\n\(decodeError)"
+                    DispatchQueue.main.async {
+                        self.error = errorMessage
+                        self.isDecoding = false
                     }
                 }
             }
