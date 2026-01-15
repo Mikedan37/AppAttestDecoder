@@ -7,7 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		90FB4A482F15A815009F238E /* AppAttestCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 90FB4A3D2F15A814009F238E /* AppAttestCore.framework */; };
+		90EA32912F1994E300D7BC0F /* AppAttestCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 90FB4A3D2F15A814009F238E /* AppAttestCore.framework */; };
+		90EA33152F19952700D7BC0F /* AppAttestCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 90FB4A3D2F15A814009F238E /* AppAttestCore.framework */; };
+		90EA33162F19952700D7BC0F /* AppAttestCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 90FB4A3D2F15A814009F238E /* AppAttestCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		90FB4B5A2F163DE9009F238E /* TestPlan.xctestplan in Resources */ = {isa = PBXBuildFile; fileRef = 90FB4B592F163DE9009F238E /* TestPlan.xctestplan */; };
 		90FB4B6A2F183622009F238E /* UniformTypeIdentifiers.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 90FB4B692F183622009F238E /* UniformTypeIdentifiers.framework */; };
 		90FB4B762F183622009F238E /* AppAttestActionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 90FB4B672F183622009F238E /* AppAttestActionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -52,6 +54,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		90EA33172F19952700D7BC0F /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				90EA33162F19952700D7BC0F /* AppAttestCore.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		90FB49D42F11F2AD009F238E /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -173,7 +186,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				90FB4A482F15A815009F238E /* AppAttestCore.framework in Frameworks */,
+				90EA33152F19952700D7BC0F /* AppAttestCore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -209,7 +222,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				90FB4A482F15A815009F238E /* AppAttestCore.framework in Frameworks */,
+				90EA32912F1994E300D7BC0F /* AppAttestCore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -308,11 +321,13 @@
 				90FB49E32F146E9B009F238E /* Frameworks */,
 				90FB49E42F146E9B009F238E /* Resources */,
 				90FB4B7B2F183622009F238E /* Embed Foundation Extensions */,
+				90EA33172F19952700D7BC0F /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				90FB4B752F183622009F238E /* PBXTargetDependency */,
+				90FB4A5A2F15A816009F238E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				90FB49E72F146E9B009F238E /* AppAttestDecoderTestApp */,
