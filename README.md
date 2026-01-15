@@ -18,6 +18,7 @@ Performs no cryptographic verification, validation, or execution-context interpr
 - Decodes App Attest attestation objects and assertions
 - Parses CBOR, ASN.1, COSE, and X.509 structures
 - Preserves undocumented and Apple-private fields
+- Preserves additional identity material (e.g. entitlement-dependent fields) without interpretation
 - Produces human-readable, forensic, and JSON outputs
 - Exposes raw materials (certificates, signatures, authenticator data)
 
@@ -186,7 +187,7 @@ See `docs/PROJECT_STATUS.md` for complete test coverage details.
 
 **"Same bundle ID ≠ same identity"** - Different artifacts may reference different App Attest keys, depending on how the app chose to generate them. Same bundle ID prefix does not mean same cryptographic identity.
 
-**"Decoded ≠ stable"** - Decoded fields are parsed from current structure. Apple may change encoding or semantics in future iOS versions.
+**"Decoded ≠ stable or semantically complete"** - Decoding reflects current structure, not full identity semantics. Apple may add entitlement-dependent fields or change encodings across iOS versions.
 
 **"Stable ≠ safe to rely on"** - Even stable fields require server-side verification. This tool does not verify cryptographic signatures or certificate chains.
 
