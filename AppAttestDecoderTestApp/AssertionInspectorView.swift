@@ -207,9 +207,26 @@ struct AssertionInspectorView: View {
                     decodedOutput = forensicOutput
                     
                 case .losslessTree:
-                    // Complete CBOR/ASN.1 tree dump
+                    // Complete CBOR tree dump
+                    // For assertions, we dump the raw CBOR structure
                     let dumper = LosslessTreeDumper(colorized: false)
-                    decodedOutput = dumper.dump(assertion.rawData)
+                    // Decode CBOR to get full tree structure
+                    if let cbor = try? CBORDecoder.decode(assertion.rawData) {
+                        var output = "LOSSLESS TREE DUMP - Assertion Object\n"
+                        output += "========================================\n\n"
+                        output += "CBOR STRUCTURE\n"
+                        output += "---------------\n"
+                        output += dumpCBORValueForDisplay(cbor, path: "assertionObject", indent: 0)
+                        output += "\n\nAUTHENTICATOR DATA\n"
+                        output += "------------------\n"
+                        output += dumpAuthenticatorDataForDisplay(assertion.authenticatorData, indent: 0)
+                        output += "\n\nCOSE_SIGN1 STRUCTURE\n"
+                        output += "--------------------\n"
+                        output += dumpCOSESign1ForDisplay(assertion.coseSign1, indent: 0)
+                        decodedOutput = output
+                    } else {
+                        decodedOutput = "Error: Failed to decode CBOR structure"
+                    }
                 }
                 
                 DispatchQueue.main.async {
