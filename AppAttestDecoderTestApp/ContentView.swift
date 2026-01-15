@@ -21,6 +21,10 @@ struct ContentView: View {
     @State private var assertionError: String?
     
     @State private var showShareSheet = false
+    
+    init() {
+        print("[ContentView] Initializing...")
+    }
 
     var body: some View {
         ScrollView {
@@ -318,6 +322,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(activityItems: ["Test App Attest Extension"])
+        }
+        .onAppear {
+            print("[ContentView] View appeared")
         }
     }
 }

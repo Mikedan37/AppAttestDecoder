@@ -200,7 +200,6 @@ struct AttestationInspectorView: View {
                 case .forensic:
                     // Semantic + raw evidence view
                     let mode = ForensicMode(colorized: false)
-                    var printer = ForensicPrinter(mode: mode)
                     decodedOutput = attestation.forensicPrint(mode: mode)
                     
                 case .losslessTree:
