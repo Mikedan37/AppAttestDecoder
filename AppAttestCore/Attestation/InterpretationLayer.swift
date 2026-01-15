@@ -202,7 +202,7 @@ public struct InterpretationLayer {
         var observed: [String] = []
         var interpretation = ""
         var safeOp = ""
-        var specOrigin: SpecOrigin = .apple
+        let specOrigin: SpecOrigin = .apple
         var stability: Stability = .private
         var safeUse: SafeUse = .auditOnly
         
