@@ -322,8 +322,8 @@ struct ContentView: View {
                     .disabled(true)
                     .opacity(0.3)
                 }
+                .padding()
             }
-            .padding()
             .navigationTitle("App Attest Test")
             .navigationBarTitleDisplayMode(.inline)
         }
