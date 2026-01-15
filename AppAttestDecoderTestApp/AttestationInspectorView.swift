@@ -199,8 +199,9 @@ struct AttestationInspectorView: View {
                     
                 case .forensic:
                     // Semantic + raw evidence view
-                    let printer = ForensicPrinter(colorized: false)
-                    decodedOutput = printer.print(attestation)
+                    let mode = ForensicMode(colorized: false)
+                    var printer = ForensicPrinter(mode: mode)
+                    decodedOutput = attestation.forensicPrint(mode: mode)
                     
                 case .losslessTree:
                     // Complete CBOR/ASN.1 tree dump
