@@ -315,6 +315,8 @@ struct AssertionInspectorView: View {
             output += "\(indentStr)\(path): null\n"
         case .undefined:
             output += "\(indentStr)\(path): undefined\n"
+        @unknown default:
+            output += "\(indentStr)\(path): unknown CBOR type\n"
         }
         
         return output
