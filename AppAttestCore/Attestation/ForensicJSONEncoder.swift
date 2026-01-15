@@ -250,6 +250,26 @@ public struct ForensicJSONEncoder {
             json["type"] = "extendedKeyUsage"
             json["usages"] = usages.map { $0.name }
             
+        case .subjectKeyIdentifier(let keyId):
+            json["type"] = "subjectKeyIdentifier"
+            json["keyIdentifier"] = encodeDataField(keyId, encoding: "OCTET STRING")
+            
+        case .authorityKeyIdentifier(let keyId, let issuer, let serial):
+            json["type"] = "authorityKeyIdentifier"
+            if let keyId = keyId {
+                json["keyIdentifier"] = encodeDataField(keyId, encoding: "OCTET STRING")
+            }
+            if let issuer = issuer {
+                json["authorityCertIssuer"] = issuer
+            }
+            if let serial = serial {
+                json["authorityCertSerialNumber"] = encodeDataField(serial, encoding: "INTEGER")
+            }
+            
+        case .subjectAlternativeName(let names):
+            json["type"] = "subjectAlternativeName"
+            json["names"] = names.map { $0.description }
+            
         case .appleOID(_, let appleExt):
             json["type"] = "appleOID"
             json["appleExtension"] = encodeAppleExtension(appleExt)

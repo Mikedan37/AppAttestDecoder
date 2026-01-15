@@ -5,13 +5,6 @@
 //  Created by Michael Danylchuk on 1/12/26.
 //
 
-//
-//  X509Extension.swift
-//  AppAttestDecoderCLI
-//
-//  Created by Michael Danylchuk on 1/12/26.
-//
-
 import Foundation
 
 /// Decoded X.509 certificate extension
@@ -22,13 +15,27 @@ public enum X509Extension {
     // MARK: - Standard Extensions
     
     /// Basic Constraints (2.5.29.19)
+    /// Indicates whether the subject is a CA and maximum path length
     case basicConstraints(isCA: Bool, pathLengthConstraint: Int?)
     
     /// Key Usage (2.5.29.15)
+    /// Defines the purpose of the key
     case keyUsage([KeyUsage])
     
     /// Extended Key Usage (2.5.29.37)
+    /// Additional key purposes beyond basic key usage
     case extendedKeyUsage([ExtendedKeyUsage])
+    
+    /// Subject Alternative Name (2.5.29.17)
+    case subjectAlternativeName([SubjectAlternativeName])
+    
+    /// Authority Key Identifier (2.5.29.35)
+    case authorityKeyIdentifier(keyIdentifier: Data?, authorityCertIssuer: String?, authorityCertSerialNumber: Data?)
+    
+    /// Subject Key Identifier (2.5.29.14)
+    case subjectKeyIdentifier(Data)
+    
+    // MARK: - Apple Extensions
     
     /// Apple proprietary extension with decoded value
     case appleOID(oid: String, decoded: AppleAppAttestExtension)
@@ -39,6 +46,10 @@ public enum X509Extension {
     // MARK: - Decode
     
     /// Decode an extension from its OID and raw DER value
+    /// - Parameters:
+    ///   - oid: The extension OID
+    ///   - rawValue: The raw DER bytes of the extension value
+    /// - Returns: Decoded extension, or unknown if decoding fails
     public static func decode(oid: String, rawValue: Data) -> X509Extension {
         do {
             switch oid {
@@ -48,6 +59,12 @@ public enum X509Extension {
                 return try decodeKeyUsage(rawValue)
             case X509OID.extendedKeyUsage:
                 return try decodeExtendedKeyUsage(rawValue)
+            case X509OID.subjectAlternativeName:
+                return try decodeSubjectAlternativeName(rawValue)
+            case X509OID.authorityKeyIdentifier:
+                return try decodeAuthorityKeyIdentifier(rawValue)
+            case X509OID.subjectKeyIdentifier:
+                return try decodeSubjectKeyIdentifier(rawValue)
             default:
                 if X509OID.isAppleOID(oid) {
                     return try decodeAppleExtension(oid: oid, rawValue: rawValue)
@@ -86,6 +103,12 @@ public enum X509Extension {
                         for byte in intBytes {
                             value = (value << 8) | Int(byte)
                         }
+                        // Handle signed integers (two's complement)
+                        if intBytes[0] & 0x80 != 0 {
+                            // Negative - not typical for path length, but handle it
+                            let mask = (1 << (intBytes.count * 8)) - 1
+                            value = value - mask - 1
+                        }
                         pathLength = value
                     }
                 }
@@ -99,6 +122,7 @@ public enum X509Extension {
         var reader = ASN1Reader(data)
         let bitString = try reader.expectTag(.bitString)
         
+        // First byte is "unused bits" count
         let bitStringData = reader.data.subdata(in: bitString.valueRange)
         guard bitStringData.count >= 1 else {
             throw ASN1Error.truncated
@@ -112,7 +136,7 @@ public enum X509Extension {
         
         for byte in bits {
             for bitOffset in 0..<8 {
-                if bitPosition >= 9 { break }
+                if bitPosition >= 9 { break } // Key Usage has 9 defined bits
                 if unusedBits > 0 && bitPosition == (bits.count * 8 - unusedBits) {
                     break
                 }
@@ -140,12 +164,102 @@ public enum X509Extension {
                 if let usage = ExtendedKeyUsage.fromOID(oid) {
                     usages.append(usage)
                 } else {
+                    // Unknown EKU OID - preserve it
                     usages.append(.unknown(oid: oid))
                 }
             }
         }
         
         return .extendedKeyUsage(usages)
+    }
+    
+    private static func decodeSubjectAlternativeName(_ data: Data) throws -> X509Extension {
+        var reader = ASN1Reader(data)
+        // SAN is a GeneralNames, which is a SEQUENCE OF GeneralName
+        let seq = try reader.expectTag(.sequence)
+        var names: [SubjectAlternativeName] = []
+        let readerData = reader.data  // Copy to avoid overlapping access
+        
+        try reader.withValueReader(seq) { r in
+            while r.remaining > 0 {
+                // GeneralName is a CHOICE, tagged with context-specific tags
+                let tlv = try r.readTLV()
+                let tag = tlv.tag
+                
+                // Context-specific tags: [0] otherName, [1] rfc822Name, [2] dNSName, etc.
+                if tag.tagClass == 0b1000_0000 { // Context-specific
+                    let nameType = Int(tag.number)
+                    let valueData = readerData.subdata(in: tlv.valueRange)
+                    
+                    switch nameType {
+                    case 2: // dNSName (IA5String)
+                        if let str = String(data: valueData, encoding: .ascii) {
+                            names.append(.dnsName(str))
+                        }
+                    case 4: // directoryName (Name)
+                        // For now, just store as raw
+                        names.append(.directoryName(valueData))
+                    case 6: // uniformResourceIdentifier (IA5String)
+                        if let str = String(data: valueData, encoding: .ascii) {
+                            names.append(.uri(str))
+                        }
+                    case 7: // iPAddress (OCTET STRING)
+                        names.append(.ipAddress(valueData))
+                    default:
+                        names.append(.other(nameType, valueData))
+                    }
+                }
+            }
+        }
+        
+        return .subjectAlternativeName(names)
+    }
+    
+    private static func decodeAuthorityKeyIdentifier(_ data: Data) throws -> X509Extension {
+        var reader = ASN1Reader(data)
+        let seq = try reader.expectTag(.sequence)
+        var keyIdentifier: Data? = nil
+        var authorityCertIssuer: String? = nil
+        var authorityCertSerialNumber: Data? = nil
+        
+        try reader.withValueReader(seq) { r in
+            while r.remaining > 0 {
+                let tlv = try r.readTLV()
+                // Context-specific tags: [0] keyIdentifier, [1] authorityCertIssuer, [2] authorityCertSerialNumber
+                if tlv.tag.tagClass == 0b1000_0000 {
+                    let number = tlv.tag.number
+                    
+                    switch number {
+                    case 0: // keyIdentifier (OCTET STRING)
+                        var octReader = ASN1Reader(r.data.subdata(in: tlv.valueRange))
+                        let oct = try octReader.expectTag(.octetString)
+                        keyIdentifier = octReader.data.subdata(in: oct.valueRange)
+                    case 1: // authorityCertIssuer (GeneralNames)
+                        // For now, skip complex parsing
+                        authorityCertIssuer = "GeneralNames"
+                    case 2: // authorityCertSerialNumber (INTEGER)
+                        var intReader = ASN1Reader(r.data.subdata(in: tlv.valueRange))
+                        let intBytes = try intReader.readIntegerBytes()
+                        authorityCertSerialNumber = intBytes
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+        
+        return .authorityKeyIdentifier(
+            keyIdentifier: keyIdentifier,
+            authorityCertIssuer: authorityCertIssuer,
+            authorityCertSerialNumber: authorityCertSerialNumber
+        )
+    }
+    
+    private static func decodeSubjectKeyIdentifier(_ data: Data) throws -> X509Extension {
+        var reader = ASN1Reader(data)
+        let oct = try reader.expectTag(.octetString)
+        let identifier = reader.data.subdata(in: oct.valueRange)
+        return .subjectKeyIdentifier(identifier)
     }
     
     // MARK: - Apple Extension Decoder
@@ -158,6 +272,7 @@ public enum X509Extension {
 
 // MARK: - Supporting Types
 
+/// Key Usage flags (RFC 5280)
 public enum KeyUsage: Int, CaseIterable {
     case digitalSignature = 0
     case contentCommitment = 1
@@ -184,6 +299,7 @@ public enum KeyUsage: Int, CaseIterable {
     }
 }
 
+/// Extended Key Usage OIDs
 public enum ExtendedKeyUsage {
     case serverAuth
     case clientAuth
@@ -217,3 +333,24 @@ public enum ExtendedKeyUsage {
         }
     }
 }
+
+/// Subject Alternative Name types
+public enum SubjectAlternativeName {
+    case dnsName(String)
+    case directoryName(Data)
+    case uri(String)
+    case ipAddress(Data)
+    case other(Int, Data)
+    
+    public var description: String {
+        switch self {
+        case .dnsName(let name): return "DNS: \(name)"
+        case .directoryName(let data): return "DirectoryName: [\(data.count) bytes]"
+        case .uri(let uri): return "URI: \(uri)"
+        case .ipAddress(let data): return "IP: \(data.map { String(format: "%02x", $0) }.joined(separator: ":"))"
+        case .other(let tag, let data): return "Other[\(tag)]: [\(data.count) bytes]"
+        }
+    }
+}
+
+// MARK: - ASN1Reader Extensions

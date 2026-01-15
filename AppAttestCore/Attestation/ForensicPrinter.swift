@@ -261,7 +261,7 @@ extension AttestationObject {
                         environment = env
                     }
                     decodedExtCount += 1
-                case .basicConstraints, .keyUsage, .extendedKeyUsage:
+                case .basicConstraints, .keyUsage, .extendedKeyUsage, .subjectKeyIdentifier, .authorityKeyIdentifier, .subjectAlternativeName:
                     decodedExtCount += 1
                 case .unknown:
                     opaqueExtCount += 1
@@ -286,27 +286,77 @@ extension AttestationObject {
         
         // Authenticator Data (boxed section)
         var authDataContent = ""
-        let flagsDesc = authenticatorData.flags.attestedCredentialData ? "ACD" : ""
-        authDataContent += transcript.twoColumnField(key: "RP ID HASH", value: "SHA256(\(format))")
-        authDataContent += transcript.twoColumnField(key: "FLAGS", value: "0x\(String(format: "%02x", authenticatorData.flags.rawValue)) (\(flagsDesc))")
-        authDataContent += transcript.twoColumnField(key: "USER PRESENT", value: "\(authenticatorData.flags.userPresent)")
-        authDataContent += transcript.twoColumnField(key: "USER VERIFIED", value: "\(authenticatorData.flags.userVerified)")
-        authDataContent += transcript.twoColumnField(key: "ATTESTED CREDENTIAL", value: "\(authenticatorData.flags.attestedCredentialData)")
+        
+        // RP ID Hash: SHA-256 with hex, base64, and explanation
+        let rpIdHashHex = authenticatorData.rpIdHash.map { String(format: "%02x", $0) }.joined()
+        let rpIdHashBase64 = authenticatorData.rpIdHash.base64EncodedString()
+        authDataContent += transcript.twoColumnField(key: "RP ID HASH", value: "SHA-256(bundle identifier)")
+        authDataContent += transcript.twoColumnField(key: "  Algorithm", value: "SHA-256 (RFC 6234)")
+        authDataContent += transcript.twoColumnField(key: "  Hex", value: rpIdHashHex)
+        authDataContent += transcript.twoColumnField(key: "  Base64", value: rpIdHashBase64)
+        
+        // Flags: detailed bitmask breakdown
+        let flagsRaw = authenticatorData.flags.rawValue
+        var flagsBits: [String] = []
+        if flagsRaw & 0x01 != 0 { flagsBits.append("UP (User Present, bit 0)") }
+        if flagsRaw & 0x04 != 0 { flagsBits.append("UV (User Verified, bit 2)") }
+        if flagsRaw & 0x40 != 0 { flagsBits.append("AT (Attested Credential Data, bit 6)") }
+        if flagsRaw & 0x80 != 0 { flagsBits.append("ED (Extensions Included, bit 7)") }
+        let flagsDesc = flagsBits.isEmpty ? "none set" : flagsBits.joined(separator: ", ")
+        authDataContent += transcript.twoColumnField(key: "FLAGS", value: "0x\(String(format: "%02x", flagsRaw)) (0b\(String(flagsRaw, radix: 2, uppercase: false).padding(toLength: 8, withPad: "0", startingAt: 0)))")
+        authDataContent += transcript.twoColumnField(key: "  Bitmask", value: flagsDesc)
+        authDataContent += transcript.twoColumnField(key: "  USER PRESENT", value: "\(authenticatorData.flags.userPresent) (bit 0, WebAuthn §6.1)")
+        authDataContent += transcript.twoColumnField(key: "  USER VERIFIED", value: "\(authenticatorData.flags.userVerified) (bit 2, WebAuthn §6.1)")
+        authDataContent += transcript.twoColumnField(key: "  ATTESTED CRED", value: "\(authenticatorData.flags.attestedCredentialData) (bit 6, WebAuthn §6.1)")
+        authDataContent += transcript.twoColumnField(key: "  EXTENSIONS", value: "\(authenticatorData.flags.extensionsIncluded) (bit 7, WebAuthn §6.1)")
+        
+        // Sign Count: replay protection explanation
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.groupingSeparator = ","
         let signCountFormatted = formatter.string(from: NSNumber(value: authenticatorData.signCount)) ?? "\(authenticatorData.signCount)"
-        authDataContent += transcript.twoColumnField(key: "SIGN COUNT", value: "\(signCountFormatted) (anti-replay counter)")
+        let signCountNote = authenticatorData.signCount == 0 
+            ? "Initial attestation (counter starts at 0)" 
+            : "Replay protection counter (must increment on each use)"
+        authDataContent += transcript.twoColumnField(key: "SIGN COUNT", value: "\(signCountFormatted)")
+        authDataContent += transcript.twoColumnField(key: "  Purpose", value: signCountNote)
+        authDataContent += transcript.twoColumnField(key: "  Spec", value: "WebAuthn §6.1 (monotonic counter)")
         
         output += transcript.boxedSection("AUTHENTICATOR DATA", content: authDataContent)
         
         // Attested Credential Data
         if let credData = authenticatorData.attestedCredentialData {
             var credDataContent = ""
-            credDataContent += transcript.twoColumnField(key: "AAGUID", value: "[\(credData.aaguid.count) bytes]")
-            credDataContent += transcript.twoColumnField(key: "CREDENTIAL ID", value: "[\(credData.credentialId.count) bytes]")
             
-            // Credential Public Key (COSE Key - decoded)
+            // AAGUID: UUID format + raw bytes
+            let aaguidHex = credData.aaguid.map { String(format: "%02x", $0) }.joined()
+            let aaguidBase64 = credData.aaguid.base64EncodedString()
+            // Format as UUID if 16 bytes
+            var aaguidDisplay = "[\(credData.aaguid.count) bytes]"
+            if credData.aaguid.count == 16 {
+                let uuidString = credData.aaguid.withUnsafeBytes { bytes in
+                    let uuid = NSUUID(uuidBytes: bytes.bindMemory(to: UInt8.self).baseAddress!)
+                    return uuid.uuidString
+                }
+                aaguidDisplay = "\(uuidString) (UUID format)"
+            }
+            credDataContent += transcript.twoColumnField(key: "AAGUID", value: aaguidDisplay)
+            credDataContent += transcript.twoColumnField(key: "  Hex", value: aaguidHex)
+            credDataContent += transcript.twoColumnField(key: "  Base64", value: aaguidBase64)
+            credDataContent += transcript.twoColumnField(key: "  Purpose", value: "Authenticator Attestation Globally Unique ID (WebAuthn §6.4.1)")
+            
+            // Credential ID: length + format
+            let credIdHex = credData.credentialId.map { String(format: "%02x", $0) }.joined()
+            let credIdBase64 = credData.credentialId.base64EncodedString()
+            credDataContent += transcript.twoColumnField(key: "CREDENTIAL ID", value: "\(credData.credentialId.count) bytes")
+            credDataContent += transcript.twoColumnField(key: "  Hex", value: credIdHex)
+            credDataContent += transcript.twoColumnField(key: "  Base64", value: credIdBase64)
+            credDataContent += transcript.twoColumnField(key: "  Purpose", value: "Unique identifier for this credential (WebAuthn §6.4.1)")
+            
+            // Credential Public Key (COSE Key - fully decoded)
+            credDataContent += "\n"
+            credDataContent += transcript.twoColumnField(key: "CREDENTIAL PUBLIC KEY", value: "COSE_Key structure (RFC 8152)")
+            
             if case .map(let pairs) = credData.credentialPublicKey {
                 // Decode COSE key map to named fields
                 var kty: String? = nil
@@ -331,20 +381,27 @@ extension AttestationObject {
                     }
                 }
                 
-                credDataContent += "\n"
-                credDataContent += transcript.twoColumnField(key: "kty", value: kty ?? "unknown")
+                credDataContent += transcript.twoColumnField(key: "  kty", value: kty ?? "unknown (key type, COSE §7.1)")
                 if let alg = alg {
-                    credDataContent += transcript.twoColumnField(key: "alg", value: alg)
+                    credDataContent += transcript.twoColumnField(key: "  alg", value: "\(alg) (signature algorithm, COSE §7.1)")
                 }
                 if let crv = crv {
-                    credDataContent += transcript.twoColumnField(key: "crv", value: crv)
+                    credDataContent += transcript.twoColumnField(key: "  crv", value: "\(crv) (elliptic curve, COSE §7.1)")
                 }
                 if let x = x {
-                    credDataContent += transcript.twoColumnField(key: "x", value: "[\(x.count) bytes]")
+                    let xHex = x.map { String(format: "%02x", $0) }.joined()
+                    credDataContent += transcript.twoColumnField(key: "  x", value: "[\(x.count) bytes] 🔒 (EC x-coordinate)")
+                    credDataContent += transcript.twoColumnField(key: "    Hex", value: xHex)
                 }
                 if let y = y {
-                    credDataContent += transcript.twoColumnField(key: "y", value: "[\(y.count) bytes]")
+                    let yHex = y.map { String(format: "%02x", $0) }.joined()
+                    credDataContent += transcript.twoColumnField(key: "  y", value: "[\(y.count) bytes] 🔒 (EC y-coordinate)")
+                    credDataContent += transcript.twoColumnField(key: "    Hex", value: yHex)
                 }
+                
+                // Explanation block
+                credDataContent += "\n"
+                credDataContent += transcript.twoColumnField(key: "  Note", value: "Device-generated ECDSA P-256 public key bound to attestation")
             }
             
             output += transcript.boxedSection("ATTESTED CREDENTIAL DATA", content: credDataContent)
@@ -355,7 +412,7 @@ extension AttestationObject {
         }
         
         // Extensions
-        if let extensions = authenticatorData.extensions {
+        if authenticatorData.extensions != nil {
             let extContent = transcript.twoColumnField(key: "EXTENSIONS", value: "present (CBOR-encoded)")
             output += transcript.boxedSection("EXTENSIONS", content: extContent)
         }
@@ -363,22 +420,36 @@ extension AttestationObject {
         // Attestation Statement
         var attStmtContent = ""
         
-        // Algorithm
+        // Algorithm - explicit explanation
         if let alg = attestationStatement.alg {
-            attStmtContent += transcript.twoColumnField(key: "ALGORITHM", value: "\(alg) (ES256)")
+            attStmtContent += transcript.twoColumnField(key: "ALGORITHM", value: "\(alg) (ES256, COSE alg -7)")
+            attStmtContent += transcript.twoColumnField(key: "  Note", value: "Explicitly specified in attStmt map")
         } else {
-            attStmtContent += transcript.twoColumnField(key: "ALGORITHM", value: "Implicit (certificate-based attestation)")
+            attStmtContent += transcript.twoColumnField(key: "ALGORITHM", value: "◻ Implicit (not present in attStmt)")
+            attStmtContent += transcript.twoColumnField(key: "  Reason", value: "Apple App Attest uses certificate-based attestation")
+            attStmtContent += transcript.twoColumnField(key: "  Implied", value: "ES256 (from certificate signature algorithm)")
         }
         
-        // Signature
+        // Signature - explicit explanation
         if !attestationStatement.signature.isEmpty {
-            attStmtContent += transcript.twoColumnField(key: "SIGNATURE", value: "🔒 ECDSA signature (opaque, not interpreted)")
-            attStmtContent += transcript.bulletPoint("Location: attStmt map (extracted)", indent: 2)
-            attStmtContent += transcript.bulletPoint("Purpose: ECDSA signature over authenticatorData || clientDataHash", indent: 2)
-            attStmtContent += transcript.bulletPoint("Verification: requires validated certificate chain (not performed here)", indent: 2)
+            attStmtContent += transcript.twoColumnField(key: "SIGNATURE", value: "🔒 Present (\(attestationStatement.signature.count) bytes)")
+            attStmtContent += transcript.twoColumnField(key: "  Type", value: "ECDSA signature (cryptographic, not interpreted)")
+            attStmtContent += transcript.twoColumnField(key: "  Location", value: "attStmt map 'sig' field")
+            attStmtContent += transcript.twoColumnField(key: "  Purpose", value: "Signature over authenticatorData || clientDataHash")
+            attStmtContent += transcript.twoColumnField(key: "  Verification", value: "Requires validated certificate chain (not performed)")
+            attStmtContent += transcript.twoColumnField(key: "  Spec", value: "WebAuthn §8.2 (Apple App Attest format)")
         } else {
-            attStmtContent += transcript.twoColumnField(key: "SIGNATURE", value: "◻ Not present (certificate-based attestation)")
+            attStmtContent += transcript.twoColumnField(key: "SIGNATURE", value: "◻ Not present (by design)")
+            attStmtContent += transcript.twoColumnField(key: "  Reason", value: "Apple App Attest relies on X.509 certificate chain")
+            attStmtContent += transcript.twoColumnField(key: "  Trust Model", value: "Certificate trust, not COSE signature")
+            attStmtContent += transcript.twoColumnField(key: "  Spec", value: "WebAuthn §8.2 (Apple App Attest format)")
         }
+        
+        // Raw attStmt CBOR explanation
+        attStmtContent += "\n"
+        attStmtContent += transcript.twoColumnField(key: "ATTESTATION FORMAT", value: "apple-appattest")
+        attStmtContent += transcript.twoColumnField(key: "  Trust Mechanism", value: "X.509 certificate chain validation")
+        attStmtContent += transcript.twoColumnField(key: "  Signature Method", value: "Certificate-based (not COSE sig)")
         
         output += transcript.boxedSection("ATTESTATION STATEMENT", content: attStmtContent)
         
@@ -396,17 +467,53 @@ extension AttestationObject {
                 if let cert = try? X509Certificate.parse(der: certDER) {
                     var certContent = ""
                     
-                    // Summary (two-column)
-                    let subjectStr = cert.subject.attributes.first(where: { $0.oid == "2.5.4.3" })?.value ?? cert.subject.description
-                    certContent += transcript.twoColumnField(key: "SUBJECT", value: subjectStr)
+                    // Subject: Full DN with attribute breakdown
+                    let subjectDN = X509Helpers.formatDN(cert.subject)
+                    certContent += transcript.twoColumnField(key: "SUBJECT", value: subjectDN)
+                    let subjectAttrs = X509Helpers.formatDNDetailed(cert.subject)
+                    for attr in subjectAttrs {
+                        certContent += transcript.twoColumnField(key: "  \(attr.name)", value: attr.value)
+                    }
                     
-                    let issuerStr = cert.issuer.attributes.first(where: { $0.oid == "2.5.4.3" })?.value ?? cert.issuer.description
-                    certContent += transcript.twoColumnField(key: "ISSUER", value: issuerStr)
+                    // Issuer: Full DN with attribute breakdown
+                    let issuerDN = X509Helpers.formatDN(cert.issuer)
+                    certContent += transcript.twoColumnField(key: "ISSUER", value: issuerDN)
+                    let issuerAttrs = X509Helpers.formatDNDetailed(cert.issuer)
+                    for attr in issuerAttrs {
+                        certContent += transcript.twoColumnField(key: "  \(attr.name)", value: attr.value)
+                    }
                     
+                    // Serial Number
+                    let serialHex = cert.serialNumber.map { String(format: "%02x", $0) }.joined()
+                    certContent += transcript.twoColumnField(key: "SERIAL NUMBER", value: serialHex)
+                    
+                    // Signature Algorithm
+                    let sigAlgName = X509Helpers.signatureAlgorithmName(for: cert.signatureAlgorithmOID)
+                    certContent += transcript.twoColumnField(key: "SIGNATURE ALG", value: sigAlgName)
+                    certContent += transcript.twoColumnField(key: "  OID", value: cert.signatureAlgorithmOID)
+                    
+                    // Public Key
+                    let pubKeyAlgName = X509Helpers.publicKeyAlgorithmName(for: cert.subjectPublicKeyAlgorithmOID)
+                    let pubKeyDetails = X509Helpers.publicKeyDetails(algorithmOID: cert.subjectPublicKeyAlgorithmOID, keyBits: cert.subjectPublicKeyBits)
+                    certContent += transcript.twoColumnField(key: "PUBLIC KEY", value: pubKeyDetails.type)
+                    if let curve = pubKeyDetails.curve {
+                        certContent += transcript.twoColumnField(key: "  Curve", value: curve)
+                    }
+                    if let keySize = pubKeyDetails.keySize {
+                        certContent += transcript.twoColumnField(key: "  Key Size", value: "\(keySize) bits")
+                    }
+                    certContent += transcript.twoColumnField(key: "  Algorithm", value: pubKeyAlgName)
+                    if let keyBits = cert.subjectPublicKeyBits {
+                        certContent += transcript.twoColumnField(key: "  Raw Length", value: "\(keyBits.count) bytes")
+                    }
+                    
+                    // Validity
                     let formatter = ISO8601DateFormatter()
-                    formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
+                    formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate, .withTime, .withColonSeparatorInTime, .withTimeZone]
                     certContent += transcript.twoColumnField(key: "NOT BEFORE", value: formatter.string(from: cert.validity.notBefore))
                     certContent += transcript.twoColumnField(key: "NOT AFTER", value: formatter.string(from: cert.validity.notAfter))
+                    let durationDays = X509Helpers.validityDurationDays(notBefore: cert.validity.notBefore, notAfter: cert.validity.notAfter)
+                    certContent += transcript.twoColumnField(key: "VALIDITY DURATION", value: "\(durationDays) days")
                     
                     // Extensions (Decoded) - with visual indicators
                     let decodedExts = cert.decodedExtensions
@@ -416,7 +523,7 @@ extension AttestationObject {
                             let extName = X509OID.name(for: oid)
                             let symbol: String
                             switch ext {
-                            case .appleOID, .basicConstraints, .keyUsage, .extendedKeyUsage:
+                            case .appleOID, .basicConstraints, .keyUsage, .extendedKeyUsage, .subjectKeyIdentifier, .authorityKeyIdentifier, .subjectAlternativeName:
                                 symbol = ForensicTranscriptPrinter.StatusSymbol.decoded
                             case .unknown:
                                 symbol = ForensicTranscriptPrinter.StatusSymbol.opaque
@@ -430,18 +537,46 @@ extension AttestationObject {
                                 if let pathLength = pathLength {
                                     certContent += transcript.bulletPoint("pathLengthConstraint: \(pathLength)", indent: 2)
                                 }
+                                certContent += transcript.bulletPoint("Purpose: CA certificate constraint (RFC 5280 §4.2.1.9)", indent: 2)
                             case .keyUsage(let usages):
                                 for usage in usages {
                                     certContent += transcript.bulletPoint(usage.name, indent: 2)
                                 }
+                                certContent += transcript.bulletPoint("Purpose: Key usage constraints (RFC 5280 §4.2.1.3)", indent: 2)
                             case .extendedKeyUsage(let usages):
                                 for usage in usages {
                                     certContent += transcript.bulletPoint(usage.name, indent: 2)
                                 }
+                                certContent += transcript.bulletPoint("Purpose: Extended key usage OIDs (RFC 5280 §4.2.1.12)", indent: 2)
+                            case .subjectKeyIdentifier(let keyId):
+                                let keyIdHex = keyId.map { String(format: "%02x", $0) }.joined()
+                                certContent += transcript.bulletPoint("Key ID: \(keyIdHex)", indent: 2)
+                                certContent += transcript.bulletPoint("Purpose: Subject public key identifier (RFC 5280 §4.2.1.2)", indent: 2)
+                            case .authorityKeyIdentifier(let keyId, let issuer, let serial):
+                                if let keyId = keyId {
+                                    let keyIdHex = keyId.map { String(format: "%02x", $0) }.joined()
+                                    certContent += transcript.bulletPoint("Key ID: \(keyIdHex)", indent: 2)
+                                }
+                                if let issuer = issuer {
+                                    certContent += transcript.bulletPoint("Issuer: \(issuer)", indent: 2)
+                                }
+                                if let serial = serial {
+                                    let serialHex = serial.map { String(format: "%02x", $0) }.joined()
+                                    certContent += transcript.bulletPoint("Serial: \(serialHex)", indent: 2)
+                                }
+                                certContent += transcript.bulletPoint("Purpose: Authority key identifier (RFC 5280 §4.2.1.1)", indent: 2)
+                            case .subjectAlternativeName(let names):
+                                for name in names {
+                                    certContent += transcript.bulletPoint("\(name.description)", indent: 2)
+                                }
+                                certContent += transcript.bulletPoint("Purpose: Subject alternative names (RFC 5280 §4.2.1.6)", indent: 2)
                             case .appleOID(_, let appleExt):
                                 certContent += transcriptPrintAppleExtension(appleExt, transcript: &transcript, indent: 2)
-                            case .unknown(_, _):
-                                certContent += transcript.bulletPoint("Opaque (raw DER preserved)", indent: 2)
+                            case .unknown(let unknownOID, let raw):
+                                certContent += transcript.bulletPoint("OID: \(unknownOID)", indent: 2)
+                                certContent += transcript.bulletPoint("Raw DER: \(raw.count) bytes", indent: 2)
+                                certContent += transcript.bulletPoint("Reason: Unknown extension (not in RFC 5280 or Apple spec)", indent: 2)
+                                certContent += transcript.bulletPoint("Raw data preserved for audit", indent: 2)
                             }
                         }
                     }
@@ -463,10 +598,100 @@ extension AttestationObject {
                return false
            })?.1,
            case .byteString(let receiptData) = receiptValue {
-            let receiptContent = transcript.twoColumnField(key: "RECEIPT", value: "present (\(receiptData.count) bytes)")
+            var receiptContent = ""
+            
+            // Try to parse as CMS SignedData
+            if let cms = try? CMSSignedData.parse(der: receiptData) {
+                receiptContent += transcript.twoColumnField(key: "CONTAINER TYPE", value: "CMS SignedData (PKCS#7, RFC 5652)")
+                receiptContent += transcript.twoColumnField(key: "VERSION", value: "\(cms.version)")
+                
+                // Digest Algorithms
+                let digestAlgNames = cms.digestAlgorithms.map { $0.name }.joined(separator: ", ")
+                receiptContent += transcript.twoColumnField(key: "DIGEST ALGORITHMS", value: digestAlgNames)
+                
+                // Encapsulated Content Info
+                receiptContent += transcript.twoColumnField(key: "CONTENT TYPE", value: "\(cms.encapContentInfo.contentTypeName) (\(cms.encapContentInfo.contentType))")
+                receiptContent += transcript.twoColumnField(key: "PAYLOAD SIZE", value: "\(cms.encapContentInfo.content.count) bytes")
+                
+                // Certificates
+                if !cms.certificates.isEmpty {
+                    receiptContent += transcript.twoColumnField(key: "CERTIFICATES", value: "\(cms.certificates.count) certificate(s)")
+                    for (idx, certDER) in cms.certificates.enumerated() {
+                        if let cert = try? X509Certificate.parse(der: certDER) {
+                            let subjectDN = X509Helpers.formatDN(cert.subject)
+                            receiptContent += transcript.twoColumnField(key: "  Cert[\(idx)]", value: subjectDN)
+                        }
+                    }
+                }
+                
+                // Signer Infos
+                if !cms.signerInfos.isEmpty {
+                    receiptContent += transcript.twoColumnField(key: "SIGNERS", value: "\(cms.signerInfos.count) signer(s)")
+                    for (idx, signer) in cms.signerInfos.enumerated() {
+                        receiptContent += transcript.twoColumnField(key: "  Signer[\(idx)]", value: "Version \(signer.version)")
+                        receiptContent += transcript.twoColumnField(key: "    Digest Alg", value: signer.digestAlgorithm.name)
+                        receiptContent += transcript.twoColumnField(key: "    Signature Alg", value: signer.signatureAlgorithmName)
+                        receiptContent += transcript.twoColumnField(key: "    Signature", value: "🔒 \(signer.signature.count) bytes (not verified)")
+                        
+                        switch signer.sid.type {
+                        case .issuerAndSerialNumber(let issuer, let serial):
+                            let issuerDN = X509Helpers.formatDN(issuer)
+                            let serialHex = serial.map { String(format: "%02x", $0) }.joined()
+                            receiptContent += transcript.twoColumnField(key: "    Issuer", value: issuerDN)
+                            receiptContent += transcript.twoColumnField(key: "    Serial", value: serialHex)
+                        case .subjectKeyIdentifier(let keyId):
+                            let keyIdHex = keyId.map { String(format: "%02x", $0) }.joined()
+                            receiptContent += transcript.twoColumnField(key: "    Key ID", value: keyIdHex)
+                        }
+                        
+                        if let signedAttrs = signer.signedAttrs {
+                            receiptContent += transcript.twoColumnField(key: "    Signed Attrs", value: "\(signedAttrs.count) bytes")
+                        }
+                    }
+                }
+                
+                // Payload structure analysis
+                receiptContent += "\n"
+                receiptContent += transcript.twoColumnField(key: "PAYLOAD ANALYSIS", value: "Attempting structure decode...")
+                
+                // Try to decode payload as ASN.1, CBOR, or plist
+                let payload = cms.encapContentInfo.content
+                if !payload.isEmpty {
+                    // Try ASN.1
+                    var asn1Reader = ASN1Reader(payload)
+                    if let _ = try? asn1Reader.readTLV() {
+                        receiptContent += transcript.twoColumnField(key: "  Structure", value: "ASN.1 DER (nested structure)")
+                    }
+                    // Try CBOR
+                    else if let _ = try? CBORDecoder.decode(payload) {
+                        receiptContent += transcript.twoColumnField(key: "  Structure", value: "CBOR (nested structure)")
+                    }
+                    // Try plist
+                    else if let _ = try? PropertyListSerialization.propertyList(from: payload, options: [], format: nil) {
+                        receiptContent += transcript.twoColumnField(key: "  Structure", value: "Property List (plist)")
+                    }
+                    else {
+                        receiptContent += transcript.twoColumnField(key: "  Structure", value: "◻ Opaque (unknown format)")
+                    }
+                    
+                    receiptContent += transcript.twoColumnField(key: "  Note", value: "Apple-signed evidence blob, signature not verified here")
+                }
+            } else {
+                // Not CMS or parse failed
+                receiptContent += transcript.twoColumnField(key: "CONTAINER TYPE", value: "◻ Unknown (not CMS SignedData)")
+                receiptContent += transcript.twoColumnField(key: "RAW SIZE", value: "\(receiptData.count) bytes")
+                receiptContent += transcript.twoColumnField(key: "NOTE", value: "Receipt present but structure not decodable as CMS/PKCS#7")
+            }
+            
             output += transcript.boxedSection("RECEIPT", content: receiptContent)
+            
             // Raw bytes collected for end (if showRaw)
-            transcript.addRawDataBlock(title: "Receipt", data: receiptData, encoding: "CBOR")
+            transcript.addRawDataBlock(title: "Receipt", data: receiptData, encoding: "DER/CMS")
+            
+            // If CMS parsed, also collect payload separately
+            if let cms = try? CMSSignedData.parse(der: receiptData), !cms.encapContentInfo.content.isEmpty {
+                transcript.addRawDataBlock(title: "Receipt Payload", data: cms.encapContentInfo.content, encoding: "OCTET STRING")
+            }
         }
         
         // 3. RAW BYTES (only if showRaw=true, at the very end)
@@ -753,11 +978,25 @@ extension AttestationObject {
                 output += printer.printField(name: "pathLengthConstraint", raw: nil, decoded: "\(pathLength)")
             }
         case .keyUsage(let usages):
-            let usageNames = usages.map { $0.name }.joined(separator: ", ")
-            output += printer.printField(name: "usages", raw: nil, decoded: usageNames)
+            output += printer.printField(name: "usages", raw: nil, decoded: usages.map { $0.name }.joined(separator: ", "))
         case .extendedKeyUsage(let usages):
-            let usageNames = usages.map { $0.name }.joined(separator: ", ")
-            output += printer.printField(name: "usages", raw: nil, decoded: usageNames)
+            output += printer.printField(name: "usages", raw: nil, decoded: usages.map { $0.name }.joined(separator: ", "))
+        case .subjectKeyIdentifier(let keyId):
+            let keyIdHex = keyId.map { String(format: "%02x", $0) }.joined()
+            output += printer.printField(name: "keyIdentifier", raw: keyId, decoded: keyIdHex)
+        case .authorityKeyIdentifier(let keyId, let issuer, let serial):
+            if let keyId = keyId {
+                let keyIdHex = keyId.map { String(format: "%02x", $0) }.joined()
+                output += printer.printField(name: "keyIdentifier", raw: keyId, decoded: keyIdHex)
+            }
+            if let issuer = issuer {
+                output += printer.printField(name: "authorityCertIssuer", raw: nil, decoded: issuer)
+            }
+            if let serial = serial {
+                output += printer.printField(name: "authorityCertSerialNumber", raw: serial, decoded: nil)
+            }
+        case .subjectAlternativeName(let names):
+            output += printer.printField(name: "names", raw: nil, decoded: names.map { $0.description }.joined(separator: ", "))
         case .appleOID(_, let appleExt):
             output += forensicPrintAppleExtension(appleExt, printer: &printer)
         case .unknown(_, let raw):

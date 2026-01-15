@@ -365,7 +365,7 @@ public struct X509Certificate: Equatable {
         }
     }
 
-    private static func readName(_ r: inout ASN1Reader) throws -> X509Name {
+    static func readName(_ r: inout ASN1Reader) throws -> X509Name {
         // Name ::= SEQUENCE OF RDN
         let nameTLV = try r.expectTag(.sequence)
         return try r.withValueReader(nameTLV) { n in

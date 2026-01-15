@@ -385,6 +385,33 @@ extension AttestationObject {
             let valueFormatted = colorized ? formatValue(usageNames, type: .plain, colorized: colorized) : usageNames
             output += "\(indentStr)\(nameFormatted): \(valueFormatted)\n"
             
+        case .subjectKeyIdentifier(let keyId):
+            let keyIdHex = keyId.map { String(format: "%02x", $0) }.joined()
+            let valueFormatted = colorized ? formatValue(keyIdHex, type: .hex, colorized: colorized) : keyIdHex
+            output += "\(indentStr)\(nameFormatted): \(valueFormatted)\n"
+            
+        case .authorityKeyIdentifier(let keyId, let issuer, let serial):
+            var parts: [String] = []
+            if let keyId = keyId {
+                let keyIdHex = keyId.map { String(format: "%02x", $0) }.joined()
+                parts.append("Key ID: \(keyIdHex)")
+            }
+            if let issuer = issuer {
+                parts.append("Issuer: \(issuer)")
+            }
+            if let serial = serial {
+                let serialHex = serial.map { String(format: "%02x", $0) }.joined()
+                parts.append("Serial: \(serialHex)")
+            }
+            let value = parts.joined(separator: ", ")
+            let valueFormatted = colorized ? formatValue(value, type: .plain, colorized: colorized) : value
+            output += "\(indentStr)\(nameFormatted): \(valueFormatted)\n"
+            
+        case .subjectAlternativeName(let names):
+            let namesStr = names.map { $0.description }.joined(separator: ", ")
+            let valueFormatted = colorized ? formatValue(namesStr, type: .plain, colorized: colorized) : namesStr
+            output += "\(indentStr)\(nameFormatted): \(valueFormatted)\n"
+            
         case .appleOID(_, let appleExt):
             output += "\(indentStr)\(nameFormatted): \(ANSIColor.separator){\(ANSIColor.reset)\n"
             output += prettyPrintAppleExtension(appleExt, indent: indent + 2, colorized: colorized)
