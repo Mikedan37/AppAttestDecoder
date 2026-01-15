@@ -27,12 +27,17 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    // Debug: Always show something
+                    Text("App Attest Test App")
+                        .font(.title)
+                        .padding(.bottom, 8)
 
-                Button("Is Supported?") {
-                    isSupported = service.isSupported
-                }
+                    Button("Is Supported?") {
+                        isSupported = service.isSupported
+                    }
 
                 if let isSupported {
                     Text(isSupported ? "✅ Supported" : "❎ Not Supported")
