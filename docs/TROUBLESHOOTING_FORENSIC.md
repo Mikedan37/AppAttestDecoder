@@ -73,7 +73,7 @@ wc -c /path/to/attestation.txt
 wc -l /path/to/attestation.txt
 
 # Verify it's valid base64 (Swift can decode it)
-swift -c 'import Foundation; let b64 = try String(contentsOfFile: "/path/to/attestation.txt").trimmingCharacters(in: .whitespacesAndNewlines); print(Data(base64Encoded: b64) != nil ? "✅ Valid" : "❌ Invalid")'
+swift -c 'import Foundation; let b64 = try String(contentsOfFile: "/path/to/attestation.txt").trimmingCharacters(in: .whitespacesAndNewlines); print(Data(base64Encoded: b64) != nil ? "Valid" : "Invalid")'
 ```
 
 ### Test Decoding

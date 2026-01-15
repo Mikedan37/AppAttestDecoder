@@ -303,7 +303,10 @@ extension AttestationObject {
         if flagsRaw & 0x40 != 0 { flagsBits.append("AT (Attested Credential Data, bit 6)") }
         if flagsRaw & 0x80 != 0 { flagsBits.append("ED (Extensions Included, bit 7)") }
         let flagsDesc = flagsBits.isEmpty ? "none set" : flagsBits.joined(separator: ", ")
-        authDataContent += transcript.twoColumnField(key: "FLAGS", value: "0x\(String(format: "%02x", flagsRaw)) (0b\(String(flagsRaw, radix: 2, uppercase: false).padding(toLength: 8, withPad: "0", startingAt: 0)))")
+        // Format binary correctly: 8 bits, left-padded with zeros
+        let binaryStr = String(flagsRaw, radix: 2)
+        let paddedBinary = String(repeating: "0", count: max(0, 8 - binaryStr.count)) + binaryStr
+        authDataContent += transcript.twoColumnField(key: "FLAGS", value: "0x\(String(format: "%02x", flagsRaw)) (0b\(paddedBinary))")
         authDataContent += transcript.twoColumnField(key: "  Bitmask", value: flagsDesc)
         authDataContent += transcript.twoColumnField(key: "  USER PRESENT", value: "\(authenticatorData.flags.userPresent) (bit 0, WebAuthn §6.1)")
         authDataContent += transcript.twoColumnField(key: "  USER VERIFIED", value: "\(authenticatorData.flags.userVerified) (bit 2, WebAuthn §6.1)")
@@ -677,9 +680,58 @@ extension AttestationObject {
                     receiptContent += transcript.twoColumnField(key: "  Note", value: "Apple-signed evidence blob, signature not verified here")
                 }
             } else {
-                // Not CMS or parse failed
+                // Not CMS or parse failed - try other formats
                 receiptContent += transcript.twoColumnField(key: "CONTAINER TYPE", value: "◻ Unknown (not CMS SignedData)")
                 receiptContent += transcript.twoColumnField(key: "RAW SIZE", value: "\(receiptData.count) bytes")
+                
+                // Try to detect structure
+                receiptContent += "\n"
+                receiptContent += transcript.twoColumnField(key: "STRUCTURE DETECTION", value: "Attempting format identification...")
+                
+                // Try ASN.1
+                var asn1Reader = ASN1Reader(receiptData)
+                if let tlv = try? asn1Reader.readTLV() {
+                    let tagName: String
+                    switch tlv.tag {
+                    case .sequence: tagName = "SEQUENCE"
+                    case .octetString: tagName = "OCTET STRING"
+                    case .set: tagName = "SET"
+                    default: tagName = "Tag 0x\(String(format: "%02X", tlv.tag.raw))"
+                    }
+                    receiptContent += transcript.twoColumnField(key: "  Detected", value: "ASN.1 DER (\(tagName), \(tlv.length) bytes)")
+                    
+                    // If it's an OCTET STRING, try to peek inside
+                    if tlv.tag == .octetString && tlv.length > 0 {
+                        let innerData = receiptData.subdata(in: tlv.valueRange)
+                        var innerReader = ASN1Reader(innerData)
+                        if let innerTLV = try? innerReader.readTLV() {
+                            let innerTagName: String
+                            switch innerTLV.tag {
+                            case .sequence: innerTagName = "SEQUENCE"
+                            default: innerTagName = "Tag 0x\(String(format: "%02X", innerTLV.tag.raw))"
+                            }
+                            receiptContent += transcript.twoColumnField(key: "  Inner", value: "\(innerTagName) (\(innerTLV.length) bytes)")
+                        } else if let _ = try? CBORDecoder.decode(innerData) {
+                            receiptContent += transcript.twoColumnField(key: "  Inner", value: "CBOR structure")
+                        }
+                    }
+                }
+                // Try CBOR
+                else if let _ = try? CBORDecoder.decode(receiptData) {
+                    receiptContent += transcript.twoColumnField(key: "  Detected", value: "CBOR (direct encoding)")
+                }
+                // Try Property List
+                else if let _ = try? PropertyListSerialization.propertyList(from: receiptData, options: [], format: nil) {
+                    receiptContent += transcript.twoColumnField(key: "  Detected", value: "Property List (binary/XML plist)")
+                }
+                // Try UTF-8 string
+                else if let str = String(data: receiptData, encoding: .utf8), str.count < 200 {
+                    receiptContent += transcript.twoColumnField(key: "  Detected", value: "UTF-8 String (preview: \(String(str.prefix(50))))")
+                }
+                else {
+                    receiptContent += transcript.twoColumnField(key: "  Detected", value: "◻ Opaque (no recognizable structure)")
+                }
+                
                 receiptContent += transcript.twoColumnField(key: "NOTE", value: "Receipt present but structure not decodable as CMS/PKCS#7")
             }
             
@@ -763,42 +815,149 @@ extension AttestationObject {
     private func transcriptPrintAppleExtension(_ appleExt: AppleAppAttestExtension, transcript: inout ForensicTranscriptPrinter, indent: Int) -> String {
         var output = ""
         
+        // Always show ASN.1 structure first
+        output += transcript.bulletPoint("ASN.1 Structure:", indent: indent)
+        let structureDesc = describeASN1Structure(data: appleExt.rawValue)
+        output += transcript.bulletPoint("  \(structureDesc)", indent: indent + 2)
+        
+        // Then show decoded semantic content
+        output += transcript.bulletPoint("Decoded Content:", indent: indent)
+        
         switch appleExt.type {
         case .challenge(let hash):
-            output += transcript.bulletPoint("hash: SHA-256 (\(hash.count) bytes)", indent: indent)
+            output += transcript.bulletPoint("Type: Challenge (Nonce)", indent: indent + 2)
+            output += transcript.bulletPoint("Hash Algorithm: SHA-256", indent: indent + 2)
+            output += transcript.bulletPoint("Hash Length: \(hash.count) bytes", indent: indent + 2)
+            output += transcript.bulletPoint("Hash (hex): \(hash.map { String(format: "%02x", $0) }.joined())", indent: indent + 2)
+            output += transcript.bulletPoint("Purpose: SHA256(authenticatorData || clientDataHash) (WebAuthn §6.5.3)", indent: indent + 2)
+            transcript.addRawDataBlock(title: "Challenge Hash", data: hash, encoding: "SHA-256")
+            
         case .receipt(let receipt):
+            output += transcript.bulletPoint("Type: Receipt (CBOR-encoded)", indent: indent + 2)
+            // Show CBOR structure
+            if case .map(let pairs) = receipt.rawCBOR {
+                output += transcript.bulletPoint("CBOR Type: Map (\(pairs.count) entries)", indent: indent + 2)
+            } else {
+                output += transcript.bulletPoint("CBOR Type: \(describeCBORType(receipt.rawCBOR))", indent: indent + 2)
+            }
+            
             if let bundleID = receipt.bundleID {
-                output += transcript.bulletPoint("bundleID: \(bundleID)", indent: indent)
+                output += transcript.bulletPoint("Bundle ID: \(bundleID)", indent: indent + 2)
             }
             if let teamID = receipt.teamID {
-                output += transcript.bulletPoint("teamID: \(teamID)", indent: indent)
+                output += transcript.bulletPoint("Team ID: \(teamID)", indent: indent + 2)
             }
             if let appVersion = receipt.appVersion {
-                output += transcript.bulletPoint("appVersion: \(appVersion)", indent: indent)
+                output += transcript.bulletPoint("App Version: \(appVersion)", indent: indent + 2)
             }
             if let creationDate = receipt.receiptCreationDate {
                 let formatter = ISO8601DateFormatter()
-                formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
-                output += transcript.bulletPoint("receiptCreationDate: \(formatter.string(from: creationDate))", indent: indent)
+                formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate, .withTime, .withColonSeparatorInTime]
+                output += transcript.bulletPoint("Creation Date: \(formatter.string(from: creationDate))", indent: indent + 2)
             }
             if let expirationDate = receipt.receiptExpirationDate {
                 let formatter = ISO8601DateFormatter()
-                formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
-                output += transcript.bulletPoint("receiptExpirationDate: \(formatter.string(from: expirationDate))", indent: indent)
+                formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate, .withTime, .withColonSeparatorInTime]
+                output += transcript.bulletPoint("Expiration Date: \(formatter.string(from: expirationDate))", indent: indent + 2)
             }
+            output += transcript.bulletPoint("Purpose: App metadata evidence (Apple proprietary)", indent: indent + 2)
+            
         case .keyPurpose(let purpose):
-            output += transcript.bulletPoint("purpose: \(purpose)", indent: indent)
+            output += transcript.bulletPoint("Type: Key Purpose", indent: indent + 2)
+            output += transcript.bulletPoint("Value: \(purpose)", indent: indent + 2)
+            output += transcript.bulletPoint("Purpose: Indicates key usage (e.g., \"app-attest\", \"fraud-receipt-signing\")", indent: indent + 2)
+            
         case .environment(let env):
-            output += transcript.bulletPoint("environment: \(env)", indent: indent)
+            output += transcript.bulletPoint("Type: Environment", indent: indent + 2)
+            output += transcript.bulletPoint("Value: \(env)", indent: indent + 2)
+            output += transcript.bulletPoint("Purpose: App Store environment (\"sandbox\" or \"production\")", indent: indent + 2)
+            
         case .osVersion(let version):
-            output += transcript.bulletPoint("osVersion: \(version)", indent: indent)
+            output += transcript.bulletPoint("Type: OS Version", indent: indent + 2)
+            output += transcript.bulletPoint("Value: \(version)", indent: indent + 2)
+            output += transcript.bulletPoint("Purpose: iOS/macOS version string (e.g., \"17.2\", \"26.4\")", indent: indent + 2)
+            
         case .deviceClass(let deviceClass):
-            output += transcript.bulletPoint("deviceClass: \(deviceClass)", indent: indent)
-        case .unknown(_, let raw):
-            output += transcript.bulletPoint("Opaque (\(raw.count) bytes, raw DER preserved)", indent: indent)
+            output += transcript.bulletPoint("Type: Device Class", indent: indent + 2)
+            output += transcript.bulletPoint("Value: \(deviceClass)", indent: indent + 2)
+            output += transcript.bulletPoint("Purpose: Device type (e.g., \"iphoneos\", \"ipados\")", indent: indent + 2)
+            
+        case .unknown(let oid, let raw):
+            output += transcript.bulletPoint("Type: Unknown Apple Extension", indent: indent + 2)
+            output += transcript.bulletPoint("OID: \(oid)", indent: indent + 2)
+            output += transcript.bulletPoint("Raw Length: \(raw.count) bytes", indent: indent + 2)
+            output += transcript.bulletPoint("Reason: No public spec available, structure cannot be safely inferred", indent: indent + 2)
+            output += transcript.bulletPoint("Raw data preserved for audit", indent: indent + 2)
         }
         
         return output
+    }
+    
+    private func describeASN1Structure(data: Data) -> String {
+        guard !data.isEmpty else { return "Empty" }
+        
+        var reader = ASN1Reader(data)
+        do {
+            let tlv = try reader.readTLV()
+            let tagName: String
+            switch tlv.tag {
+            case .octetString: tagName = "OCTET STRING"
+            case .sequence: tagName = "SEQUENCE"
+            case .set: tagName = "SET"
+            case .oid: tagName = "OBJECT IDENTIFIER"
+            case .utf8String: tagName = "UTF8String"
+            case .printableString: tagName = "PrintableString"
+            case .ia5String: tagName = "IA5String"
+            case .integer: tagName = "INTEGER"
+            default:
+                tagName = "Tag 0x\(String(format: "%02X", tlv.tag.raw))"
+            }
+            
+            var desc = "\(tagName) (\(tlv.length) bytes)"
+            
+            // If it's an OCTET STRING, try to peek inside
+            if tlv.tag == .octetString && tlv.length > 0 {
+                let innerData = data.subdata(in: tlv.valueRange)
+                // Try to detect inner structure
+                if innerData.count > 0 {
+                    var innerReader = ASN1Reader(innerData)
+                    if let innerTLV = try? innerReader.readTLV() {
+                        let innerTagName: String
+                        switch innerTLV.tag {
+                        case .sequence: innerTagName = "SEQUENCE"
+                        case .set: innerTagName = "SET"
+                        case .octetString: innerTagName = "OCTET STRING"
+                        default: innerTagName = "Tag 0x\(String(format: "%02X", innerTLV.tag.raw))"
+                        }
+                        desc += " → contains \(innerTagName) (\(innerTLV.length) bytes)"
+                    } else if let _ = try? CBORDecoder.decode(innerData) {
+                        desc += " → contains CBOR"
+                    } else if let _ = try? PropertyListSerialization.propertyList(from: innerData, options: [], format: nil) {
+                        desc += " → contains Property List"
+                    }
+                }
+            }
+            
+            return desc
+        } catch {
+            return "Parse Error: \(error)"
+        }
+    }
+    
+    private func describeCBORType(_ value: CBORValue) -> String {
+        switch value {
+        case .unsigned: return "Unsigned Integer"
+        case .negative: return "Negative Integer"
+        case .byteString: return "Byte String"
+        case .textString: return "Text String"
+        case .array(let arr): return "Array (\(arr.count) elements)"
+        case .map(let pairs): return "Map (\(pairs.count) entries)"
+        case .tagged: return "Tagged"
+        case .simple: return "Simple Value"
+        case .boolean: return "Boolean"
+        case .null: return "Null"
+        case .undefined: return "Undefined"
+        }
     }
     
     private func keyDescription(_ key: CBORValue) -> String {

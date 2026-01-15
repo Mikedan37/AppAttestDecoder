@@ -27,25 +27,25 @@ Or use a text editor to create `/tmp/attestation.b64` with the base64 string.
 ### Step 3: Verify Output
 
 You should see:
-- ✅ **Attestation Object (Forensic View)** header
-- ✅ **rawCBOR** with base64 + hex + length
-- ✅ **authenticatorData** with:
+- **Attestation Object (Forensic View)** header
+- **rawCBOR** with base64 + hex + length
+- **authenticatorData** with:
   - Raw bytes (hex + base64)
   - RP ID hash (hex + base64 + encoding)
   - Flags (raw byte + bit breakdown)
   - Sign count
   - Attested credential data (if present)
-- ✅ **attestationStatement** with:
+- **attestationStatement** with:
   - Algorithm
   - Signature (marked [OPAQUE])
   - **x5c** certificate chain:
     - `[0] (leaf)` with Subject, Issuer, Validity, Extensions
     - `[1] (intermediate)` with full details
     - `[2] (root)` with full details
-- ✅ **Extensions** decoded:
+- **Extensions** decoded:
   - Apple App Attest Receipt (bundle ID, team ID, environment, OS version, device class)
   - Key Usage, Basic Constraints, etc.
-- ✅ **Raw DER** preserved everywhere alongside decoded values
+- **Raw DER** preserved everywhere alongside decoded values
 
 ## Alternative: Direct Base64 Input
 
@@ -71,12 +71,12 @@ This produces machine-readable JSON with:
 Success is **not** "I recognize every field."
 
 Success is:
-- ✅ Nothing hidden
-- ✅ Nothing dropped
-- ✅ Raw bytes always visible
-- ✅ Decoded values clearly labeled
-- ✅ Unknown things preserved, not guessed
-- ✅ Opaque values marked [OPAQUE]
+- Nothing hidden
+- Nothing dropped
+- Raw bytes always visible
+- Decoded values clearly labeled
+- Unknown things preserved, not guessed
+- Opaque values marked [OPAQUE]
 
 ## Common Issues
 

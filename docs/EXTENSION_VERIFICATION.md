@@ -2,14 +2,14 @@
 
 Use this checklist to verify your extension is properly configured.
 
-## ✅ Step 1: Target Exists
+## Step 1: Target Exists
 
 - [ ] Open Xcode
 - [ ] Click project name in navigator
 - [ ] See `ActionExtension` in TARGETS list
 - [ ] If NO → Go back to QUICK_FIX_EXTENSION.md Step 1
 
-## ✅ Step 2: Source File is in Target
+## Step 2: Source File is in Target
 
 - [ ] Select `ActionExtensionViewController.swift` in navigator
 - [ ] Open File Inspector (right sidebar)
@@ -17,7 +17,7 @@ Use this checklist to verify your extension is properly configured.
   - [ ] `ActionExtension` is CHECKED
   - [ ] `AppAttestDecoderTestApp` is UNCHECKED (should NOT be in main app)
 
-## ✅ Step 3: Extension is Embedded
+## Step 3: Extension is Embedded
 
 - [ ] Select `AppAttestDecoderTestApp` target (main app)
 - [ ] Go to "Build Phases" tab
@@ -26,7 +26,7 @@ Use this checklist to verify your extension is properly configured.
 - [ ] "Code Sign On Copy" checkbox is checked
 - [ ] If NOT listed → Click "+" → Add `ActionExtension`
 
-## ✅ Step 4: Capabilities Configured
+## Step 4: Capabilities Configured
 
 - [ ] Select `ActionExtension` target
 - [ ] Go to "Signing & Capabilities" tab
@@ -34,7 +34,7 @@ Use this checklist to verify your extension is properly configured.
 - [ ] See "App Groups" capability (with green checkmark)
 - [ ] App Group ID matches main app's App Group ID
 
-## ✅ Step 5: Info.plist Configuration
+## Step 5: Info.plist Configuration
 
 - [ ] Select `ActionExtension` target
 - [ ] Go to "Info" tab
@@ -42,14 +42,14 @@ Use this checklist to verify your extension is properly configured.
 - [ ] `NSExtensionPointIdentifier` = `com.apple.ui-services`
 - [ ] `NSExtensionActivationRule` → `NSExtensionActivationSupportsText` = `true` (Boolean)
 
-## ✅ Step 6: Bundle Identifier
+## Step 6: Bundle Identifier
 
 - [ ] Select `ActionExtension` target
 - [ ] Go to "General" tab
 - [ ] Bundle Identifier = `DanylchukStudios.AppAttestDecoderTestApp.ActionExtension` (or your team's format)
 - [ ] Must start with main app's bundle ID: `DanylchukStudios.AppAttestDecoderTestApp`
 
-## ✅ Step 7: Code Signing
+## Step 7: Code Signing
 
 - [ ] Select `ActionExtension` target
 - [ ] Go to "Signing & Capabilities" tab
@@ -57,7 +57,7 @@ Use this checklist to verify your extension is properly configured.
 - [ ] Team is selected (same as main app)
 - [ ] No signing errors shown
 
-## ✅ Step 8: Build and Install
+## Step 8: Build and Install
 
 - [ ] Product → Clean Build Folder (Cmd+Shift+K)
 - [ ] **Delete app from device** (long press → Delete)
@@ -66,7 +66,7 @@ Use this checklist to verify your extension is properly configured.
 - [ ] Build and Run (Cmd+R)
 - [ ] Wait for install to complete
 
-## ✅ Step 9: Verify in Settings
+## Step 9: Verify in Settings
 
 - [ ] Open Settings app on device
 - [ ] Scroll to find your app name
@@ -75,7 +75,7 @@ Use this checklist to verify your extension is properly configured.
 - [ ] See `ActionExtension` listed under Extensions
 - [ ] If NOT listed → Extension isn't properly embedded
 
-## ✅ Step 10: Test Share Sheet
+## Step 10: Test Share Sheet
 
 - [ ] Open your app on device
 - [ ] Tap "Test Action Extension" button

@@ -48,6 +48,9 @@ public enum ASN1Error: Error, CustomStringConvertible {
     /// Expected a specific value but encountered another.
     case expected(_ what: String)
     
+    /// Invalid or corrupted data encountered.
+    case invalidData
+    
     public var description: String {
         switch self {
         case .truncated:
@@ -74,6 +77,8 @@ public enum ASN1Error: Error, CustomStringConvertible {
             return "Expected primitive ASN.1 type"
         case .expected(let what):
             return "Expected \(what)"
+        case .invalidData:
+            return "Invalid or corrupted ASN.1 data"
         }
     }
 }

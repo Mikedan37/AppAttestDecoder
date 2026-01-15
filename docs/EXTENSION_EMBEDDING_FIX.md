@@ -22,7 +22,7 @@ If "Embed App Extensions" section doesn't exist:
 3. In the new phase:
    - Set **Destination**: "Products Directory"
    - Set **Subpath**: (leave empty)
-   - Set **Code Sign On Copy**: ✅ (checked)
+   - Set **Code Sign On Copy**: (checked)
 4. Rename the phase to "Embed App Eensions" (optional, for clarity)
 
 If "Embed App Extensions" section exists:
@@ -41,9 +41,9 @@ If `AppAttestActionExtension.appex` appears in "Frameworks, Libraries, and Embed
 ### Step 4: Verify
 
 After adding to "Embed App Extensions":
-- ✅ Extension appears in "Embed App Extensions" section
-- ✅ "Code Sign On Copy" is checked
-- ✅ Extension does NOT appear in "Frameworks, Libraries, and Embedded Content"
+- Extension appears in "Embed App Extensions" section
+- "Code Sign On Copy" is checked
+- Extension does NOT appear in "Frameworks, Libraries, and Embedded Content"
 
 ### Step 5: Clean and Rebuild
 

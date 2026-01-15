@@ -1,6 +1,6 @@
 # Extension Embedding is Correct - Next Steps
 
-## ✅ Good News
+## Good News
 
 Your extension IS correctly embedded in "Embed Foundation Extensions" build phase. This is the correct location for Action Extensions.
 
@@ -30,10 +30,10 @@ iOS caches extension information. You MUST delete the app completely:
 1. Select `AppAttestActionExtension` target
 2. Go to **Signing & Capabilities** tab
 3. Verify:
-   - ✅ **App Attest** capability is added
-   - ✅ **App Groups** capability is added (if using App Groups)
-   - ✅ Team is selected (same as main app)
-   - ✅ No signing errors
+   - **App Attest** capability is added
+   - **App Groups** capability is added (if using App Groups)
+   - Team is selected (same as main app)
+   - No signing errors
 
 ### Step 4: Check Console Logs
 

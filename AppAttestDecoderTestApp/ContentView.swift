@@ -186,6 +186,20 @@ struct ContentView: View {
                                     UIPasteboard.general.string = attestationBlobB64
                                 }
                             }
+                        
+                        // Inspector Button
+                        // NOTE: This opens an inspection-only view.
+                        // It does NOT perform verification or make trust decisions.
+                        NavigationLink {
+                            AttestationInspectorView(base64Attestation: attestationBlobB64)
+                        } label: {
+                            HStack {
+                                Image(systemName: "magnifyingglass")
+                                Text("Inspect Attestation")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
                     }
                 } else {
                     Text("Attestation not generated")

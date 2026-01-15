@@ -32,8 +32,8 @@ The extension's bundle ID must start with the main app's bundle ID:
 
 **Extension:**
 - Bundle ID: `DanylchukStudios.AppAttestDecoderTestApp.AppAttestActionExtension`
-- ✅ Must start with main app's bundle ID
-- ✅ Must have `.AppAttestActionExtension` suffix
+- Must start with main app's bundle ID
+- Must have `.AppAttestActionExtension` suffix
 
 To check:
 1. Select `AppAttestActionExtension` target
@@ -60,18 +60,18 @@ This error often persists due to cached state. Do this complete clean:
 1. Select `AppAttestDecoderTestApp` target
 2. Go to **Signing & Capabilities**
 3. Verify:
-   - ✅ Team: "Michael Danylchuk" (or your team)
-   -y manage signing" is checked
-   - ✅ No signing errors
+   - Team: "Michael Danylchuk" (or your team)
+   - "Automatically manage signing" is checked
+   - No signing errors
 
 **Extension:**
 1. Select `AppAttestActionExtension` target
 2. Go to **Signing & Capabilities**
 3. Verify:
-   - ✅ Team: **SAME** as main app
-   - ✅ "Automatically manage signing" is checked
-   - ✅ No signing errors
-   - ✅ Bundle Identifier matches pattern (see Step 2)
+   - Team: **SAME** as main app
+   - "Automatically manage signing" is checked
+   - No signing errors
+   - Bundle Identifier matches pattern (see Step 2)
 
 ### Step 5: Check Info.plist Principal Class
 

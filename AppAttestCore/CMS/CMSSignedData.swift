@@ -241,18 +241,31 @@ public struct CMSSignedData {
                             
                             // signedAttrs [0] IMPLICIT Attributes OPTIONAL
                             var signedAttrs: Data? = nil
+                            var sigAlgTLV: ASN1TLV? = nil
+                            
                             if signer.remaining > 0 {
-                                let attrsTLV = try signer.readTLV()
-                                if attrsTLV.tag.tagClass == 0b1000_0000 && attrsTLV.tag.number == 0 {
-                                    signedAttrs = signer.data.subdata(in: attrsTLV.valueRange)
+                                let tlv = try signer.readTLV()
+                                if tlv.tag.tagClass == 0b1000_0000 && tlv.tag.number == 0 {
+                                    // This is signedAttrs
+                                    signedAttrs = signer.data.subdata(in: tlv.valueRange)
+                                    // Next should be signatureAlgorithm
+                                    if signer.remaining > 0 {
+                                        sigAlgTLV = try signer.readTLV()
+                                    }
                                 } else {
-                                    // Not signedAttrs, need to handle differently
-                                    // For now, we'll need to backtrack
+                                    // No signedAttrs, this TLV is signatureAlgorithm
+                                    sigAlgTLV = tlv
                                 }
                             }
                             
                             // signatureAlgorithm
-                            let sigAlgSeq = try signer.expectTag(.sequence)
+                            guard let sigAlgTLVUnwrapped = sigAlgTLV else {
+                                throw CMSError.invalidStructure
+                            }
+                            guard sigAlgTLVUnwrapped.tag == .sequence else {
+                                throw CMSError.invalidStructure
+                            }
+                            let sigAlgSeq = sigAlgTLVUnwrapped
                             var sigAlgOID: String = ""
                             try signer.withValueReader(sigAlgSeq) { sa in
                                 sigAlgOID = try sa.readOID()

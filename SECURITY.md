@@ -2,62 +2,53 @@
 
 ## Supported Versions
 
-We currently support the following versions with security updates:
+This tool is currently in active development. Security updates will be applied to the latest version.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.0.x   | Yes                |
+## Reporting Security Issues
 
-## Reporting a Vulnerability
+**This tool does not accept reports about "verification bugs" or "validation failures".**
 
-If you discover a security vulnerability in this project, please report it responsibly.
+This is an inspection tool, not a validator. It does not perform cryptographic verification, certificate chain validation, or make trust decisions. If you believe there is a security issue with App Attest itself, report it to Apple.
 
-### How to Report
+## Scope of Security Reports
 
-1. **Do not** open a public GitHub issue for security vulnerabilities
-2. Email security concerns to the project maintainers (if contact information is available)
-3. Alternatively, use GitHub's private vulnerability reporting feature if enabled
+We accept reports about:
+- Memory safety issues in the decoder (buffer overflows, use-after-free)
+- Denial of service vulnerabilities (malformed input causing crashes)
+- Information disclosure (leaking unintended data in output)
 
-### What to Include
+We do not accept reports about:
+- "The tool doesn't verify signatures" (by design)
+- "The tool doesn't validate certificate chains" (by design)
+- "The tool doesn't reject invalid attestations" (by design)
+- "Apple changed a format and the decoder broke" (expected, will be fixed)
 
-When reporting a vulnerability, please include:
-- Description of the vulnerability
-- Steps to reproduce (if applicable)
-- Potential impact
-- Suggested fix (if you have one)
+## Security Boundaries
 
-### Response Time
+**This tool does not make trust decisions.**
+- It parses structure only
+- It does not verify cryptographic signatures
+- It does not validate certificate chains
+- It does not check RP ID hashes or nonces
 
-We will acknowledge receipt of your report within 48 hours and provide an initial assessment within 7 days.
+**This tool should not be used to gate production traffic.**
+- Inspection results must not be used to accept or reject API requests
+- All verification must happen server-side
+- This tool is for debugging, analysis, and research
 
-### Important Notes
+**If Apple changes formats, this tool will adapt but not guarantee semantics.**
+- The decoder will be updated to parse new structures
+- Decoded fields may change meaning or encoding
+- Apple-private fields are explicitly unstable
+- Do not hardcode expectations based on decoded output
 
-**This project is a decoder library only.** It does not perform cryptographic validation or security checks. Security vulnerabilities in this project would typically relate to:
-- Memory safety issues (buffer overflows, use-after-free)
-- Denial of service (infinite loops, excessive memory allocation)
-- Information disclosure (unintended data exposure)
+## Security Model
 
-**This project does NOT provide security validation.** If you are using this decoder in production, you must implement complete server-side validation as described in the [Security Notes](README.md#security-notes) section of the README.
+This tool operates under the following security model:
 
-### Non-Official Parser Scope
+1. **Inspection only** - Parse structure, expose raw materials
+2. **No trust decisions** - Verification happens elsewhere
+3. **Best-effort decoding** - Unknown structures are preserved, not discarded
+4. **Explicit boundaries** - Clear documentation of what is and isn't done
 
-The ASN.1, CBOR, COSE, and X.509 parsing logic in this project:
-
-- Is NOT a complete implementation of the respective standards (ASN.1/DER, CBOR, COSE, X.509)
-- Is NOT a reference or authoritative parser for these standards
-- Is NOT intended for general-purpose use outside of App Attest artifact decoding
-- Exists solely to decode structures required for App Attest attestation and assertion artifacts
-
-These parsers:
-
-- Do not perform cryptographic verification
-- Do not enforce trust or policy decisions
-- Should not be used as a replacement for full-featured cryptographic libraries
-- Are purpose-built for the specific encoding patterns found in App Attest artifacts
-
-This project is not affiliated with or endorsed by Apple.
-
----
-
-**Last Updated:** January 2026
-
+If you need cryptographic verification or trust decisions, implement them separately using the raw materials exposed by this tool.

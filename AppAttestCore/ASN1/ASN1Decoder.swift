@@ -71,8 +71,23 @@ public struct ASN1Decoder {
     private func parseChildren(_ data: Data) throws -> [ASN1Node] {
         var nodes: [ASN1Node] = []
         var index = 0
+        var iterationCount = 0
+        let maxIterations = 10000  // Defensive: prevent infinite loops
+        
         while index < data.count {
+            // Defensive: prevent infinite loops from malformed data
+            guard iterationCount < maxIterations else {
+                throw ASN1Error.malformedStructure("ASN.1 parse loop exceeded maximum iterations (possible malformed data)")
+            }
+            iterationCount += 1
+            
+            let startIndex = index
             nodes.append(try parseNode(data, &index))
+            
+            // Defensive: ensure we're making progress
+            guard index > startIndex else {
+                throw ASN1Error.malformedStructure("ASN.1 parser stuck (no progress made)")
+            }
         }
         return nodes
     }
@@ -96,12 +111,26 @@ public struct ASN1Decoder {
             throw ASN1Error.truncated
         }
 
-        var length = 0
+        // Defensive: prevent integer overflow
+        var length: Int64 = 0
         for _ in 0..<byteCount {
-            length = (length << 8) | Int(data[index])
+            guard length <= (Int64.max >> 8) else {
+                throw ASN1Error.malformedStructure("ASN.1 length value overflow")
+            }
+            length = (length << 8) | Int64(data[index])
             index += 1
         }
+        
+        // Defensive: limit maximum length to prevent DoS (10 MB max)
+        let maxLength = 10 * 1024 * 1024
+        guard length <= Int64(maxLength) else {
+            throw ASN1Error.malformedStructure("ASN.1 length too large: \(length) bytes (max \(maxLength))")
+        }
+        
+        guard length <= Int64(Int.max) else {
+            throw ASN1Error.malformedStructure("ASN.1 length exceeds Int.max")
+        }
 
-        return length
+        return Int(length)
     }
 }

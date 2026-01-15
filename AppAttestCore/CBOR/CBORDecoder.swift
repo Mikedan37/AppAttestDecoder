@@ -86,8 +86,15 @@ public final class CBORDecoder {
 
     private func readArray(_ info: UInt8) throws -> [CBORValue] {
         let count = try readUInt(info)
+        
+        // Defensive: limit array size to prevent DoS (max 1M elements)
+        let maxArraySize: UInt64 = 1_000_000
+        guard count <= maxArraySize else {
+            throw CBORDecodingError.unsupportedType  // Use existing error type
+        }
+        
         var out: [CBORValue] = []
-        out.reserveCapacity(Int(count))
+        out.reserveCapacity(Int(min(count, 10000)))  // Cap initial capacity
         for _ in 0..<count {
             out.append(try decodeValue())
         }
@@ -96,8 +103,15 @@ public final class CBORDecoder {
 
     private func readMap(_ info: UInt8) throws -> [(CBORValue, CBORValue)] {
         let count = try readUInt(info)
+        
+        // Defensive: limit map size to prevent DoS (max 1M entries)
+        let maxMapSize: UInt64 = 1_000_000
+        guard count <= maxMapSize else {
+            throw CBORDecodingError.unsupportedType
+        }
+        
         var out: [(CBORValue, CBORValue)] = []
-        out.reserveCapacity(Int(count))
+        out.reserveCapacity(Int(min(count, 10000)))  // Cap initial capacity
         for _ in 0..<count {
             let key = try decodeValue()
             let val = try decodeValue()

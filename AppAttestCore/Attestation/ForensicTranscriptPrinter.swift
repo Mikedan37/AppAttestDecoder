@@ -46,7 +46,7 @@ struct ForensicTranscriptPrinter {
     // MARK: - Box Drawing
     
     func boxedSection(_ title: String, content: String) -> String {
-        let width = 70  // Increased width to prevent truncation
+        let width = 80  // Increased width for better readability
         let titleWithDashes = "─ \(title) "
         let dashesNeeded = max(0, width - titleWithDashes.count - 1)
         let topBorder = "┌" + titleWithDashes + String(repeating: "─", count: dashesNeeded) + "┐"
@@ -56,18 +56,18 @@ struct ForensicTranscriptPrinter {
         let footer = colorized ? "\(ANSIColor.header)\(bottomBorder)\(ANSIColor.reset)" : bottomBorder
         
         // Wrap content lines in box
-        let contentLines = content.components(separatedBy: "\n").filter { !$0.isEmpty }
+        let contentLines = content.components(separatedBy: "\n")
         var boxedContent = ""
         for line in contentLines {
-            // Trim trailing newline from line if present
-            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmedLine.isEmpty {
-                // Preserve ANSI codes when calculating length
-                let displayLength = trimmedLine.replacingOccurrences(of: #"\u{001B}\[[0-9;]*m"#, with: "", options: .regularExpression).count
-                let paddingNeeded = max(0, width - 2 - displayLength)
-                let paddedLine = "│ " + trimmedLine + String(repeating: " ", count: paddingNeeded) + " │"
-                boxedContent += paddedLine + "\n"
-            }
+            // Don't filter empty lines - they might be intentional spacing
+            // But trim trailing whitespace for consistency
+            let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+            
+            // Preserve ANSI codes when calculating length
+            let displayLength = trimmedLine.replacingOccurrences(of: #"\u{001B}\[[0-9;]*m"#, with: "", options: .regularExpression).count
+            let paddingNeeded = max(0, width - 2 - displayLength)
+            let paddedLine = "│ " + trimmedLine + String(repeating: " ", count: paddingNeeded) + " │"
+            boxedContent += paddedLine + "\n"
         }
         
         return "\n\(header)\n\(boxedContent)\(footer)\n"
@@ -146,10 +146,50 @@ struct ForensicTranscriptPrinter {
         let keyUpper = key.uppercased()
         let paddedKey = keyUpper.padding(toLength: keyWidth, withPad: " ", startingAt: 0)
         let nameFormatted = colorized ? "\(ANSIColor.fieldName)\(paddedKey)\(ANSIColor.reset)" : paddedKey
-        // Truncate value if too long to prevent box overflow (box width is 70, minus key width, minus "│ " and " │")
-        let maxValueLength = 70 - keyWidth - 4
-        let truncatedValue = value.count > maxValueLength ? String(value.prefix(maxValueLength - 3)) + "..." : value
-        return "\(nameFormatted) \(truncatedValue)\n"
+        
+        // Box width is 80, minus key width, minus "│ " and " │" = 80 - keyWidth - 4
+        let maxValueLength = 80 - keyWidth - 4
+        
+        // If value fits on one line, return it
+        if value.count <= maxValueLength {
+            return "\(nameFormatted) \(value)\n"
+        }
+        
+        // Otherwise, wrap across multiple lines
+        var output = ""
+        let valueLines = wrapText(value, maxLength: maxValueLength)
+        
+        // First line with key
+        output += "\(nameFormatted) \(valueLines[0])\n"
+        
+        // Subsequent lines with indentation
+        let indentStr = String(repeating: " ", count: keyWidth + 1)
+        for line in valueLines.dropFirst() {
+            output += "\(indentStr)\(line)\n"
+        }
+        
+        return output
+    }
+    
+    private func wrapText(_ text: String, maxLength: Int) -> [String] {
+        guard text.count > maxLength else { return [text] }
+        
+        var lines: [String] = []
+        var remaining = text
+        
+        while remaining.count > maxLength {
+            // Try to break at a word boundary
+            let breakIndex = remaining.prefix(maxLength).lastIndex(of: " ") ?? remaining.index(remaining.startIndex, offsetBy: maxLength)
+            let line = String(remaining[..<breakIndex])
+            lines.append(line)
+            remaining = String(remaining[remaining.index(after: breakIndex)...])
+        }
+        
+        if !remaining.isEmpty {
+            lines.append(remaining)
+        }
+        
+        return lines
     }
     
     // MARK: - Decoded Fields

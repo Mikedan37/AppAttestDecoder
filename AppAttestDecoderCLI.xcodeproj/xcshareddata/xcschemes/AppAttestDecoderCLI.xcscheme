@@ -53,19 +53,23 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "pretty --file /tmp/test_attestation_short.txt"
+            argument = "pretty --file /tmp/attestation.b64"
             isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "pretty --forensic --full --file /tmp/test_attestation_new.txt"
+            argument = "pretty --explain --file /tmp/attestation.b64"
             isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "pretty --forensic --full --file /path/to/attestation.txt"
+            argument = "pretty --backend-ready --file /tmp/attestation.b64"
             isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "pretty --forensic --file /tmp/test_attestation_new.txt"
+            argument = "pretty --forensic --full --file /tmp/attestation.b64"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "pretty --lossless-tree --file /tmp/attestation.b64 --no-color"
             isEnabled = "NO">
          </CommandLineArgument>
       </CommandLineArguments>

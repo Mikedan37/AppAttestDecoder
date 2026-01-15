@@ -33,8 +33,8 @@ The **extension target** doesn't have the App Attest capability enabled. Extensi
 3. Click **"+ Capability"** button (top left)
 4. Search for and add **"App Attest"**
 5. Verify you see:
-   - ✅ App Attest capability with green checkmark
-   - ✅ No errors or warnings
+   - App Attest capability with green checkmark
+   - No errors or warnings
 
 ### Step 2: Verify Both Targets Have App Attest
 
@@ -55,9 +55,9 @@ The **extension target** doesn't have the App Attest capability enabled. Extensi
 1. Select `AppAttestActionExtension` target
 2. Go to **Signing & Capabilities** tab
 3. Verify:
-   - ✅ "Automatically manage signing" is checked
-   - ✅ Team is selected (same as main app)
-   - ✅ No signing errors shown
+   - "Automatically manage signing" is checked
+   - Team is selected (same as main app)
+   - No signing errors shown
 
 ### Step 4: Clean and Rebuild
 
@@ -71,7 +71,7 @@ The **extension target** doesn't have the App Attest capability enabled. Extensi
 2. Check console for:
    - `[ActionExtension] viewDidAppear called`
    - `[ActionExtension] DCAppAttestService.shared.isSupported = true`
-   - `[ActionExtension] ✅ App Attest is supported, starting flow...`
+   - `[ActionExtension] App Attest is supported, starting flow...`
 3. Extension should now show "Initializing..." instead of error
 
 **Important**: The code now checks `isSupported` in `viewDidAppear` (not `viewDidLoad`) to ensure the extension is fully loaded before checking.

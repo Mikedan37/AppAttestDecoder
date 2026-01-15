@@ -23,6 +23,16 @@ import ucrt
 #endif
 import AppAttestCore
 
+// MARK: - Exit Codes
+
+/// Exit codes for CLI operations
+enum ExitCode: Int32 {
+    case success = 0              // Decoded successfully
+    case malformedInput = 1        // Input malformed (invalid base64, missing file, etc.)
+    case partialDecode = 2        // Structurally valid but partial decode (some fields opaque)
+    case internalError = 3        // Internal error (unexpected exceptions, decoder failures)
+}
+
 // MARK: - Entry
 
 let args = Array(CommandLine.arguments.dropFirst())
@@ -37,6 +47,13 @@ let optVersion = options.contains("--version") || options.contains("-V")
 let optForensic = options.contains("--forensic")
 let optBoth = options.contains("--both")
 let optFull = options.contains("--full")
+let optLosslessTree = options.contains("--lossless-tree") || options.contains("--everything")
+let optExplain = options.contains("--explain")
+let optBackendReady = options.contains("--backend-ready")
+let optSecurity = options.contains("--security")
+let optTrustPosture = options.contains("--trust-posture")
+let optStrict = options.contains("--strict")
+let optBestEffort = options.contains("--best-effort")
 
 // Context annotation flags (for research)
 func getContext(from args: [String]) -> AttestationContext? {
@@ -81,6 +98,19 @@ guard args.count >= 1 else {
 
 let mode = args[0]
 
+// Helper function for usage patterns
+func printUsagePatterns() {
+    print("Usage patterns:")
+    print("  Inspection        : pretty")
+    print("  Explanation       : pretty --explain")
+    print("  Backend setup     : pretty --backend-ready")
+    print("  Security review   : pretty --security")
+    print("  Evidence review   : pretty --forensic")
+    print("  Full truth dump   : pretty --lossless-tree")
+    print("")
+    print("See docs/CLI_QUICK_START.md for details.")
+}
+
 switch mode {
 case "attest":
     let b64 = readBase64Input(args: args)
@@ -97,12 +127,27 @@ case "assert":
     decodeAssertion(data, hex: optHex, raw: optRaw, json: optJSON)
 
 case "pretty":
+    // Check for usage help
+    if options.contains("--help-usage") {
+        printUsagePatterns()
+        exit(ExitCode.success.rawValue)
+    }
+    
     let b64 = readBase64Input(args: args)
     let colorized = !optNoColor && isTTY()
-    if optForensic {
+    
+    if optLosslessTree {
+        // Lossless tree mode - every byte, every node
+        losslessTreePrintAttestation(base64: b64, colorized: colorized)
+    } else if optForensic {
         forensicPrintAttestation(base64: b64, json: optJSON, raw: optRaw, both: optBoth, full: optFull, colorized: colorized)
     } else {
-        prettyPrintAttestation(base64: b64, verbose: optVerbose, colorized: colorized)
+        // Default: use semantic printer for clean, readable output
+        // Add interpretation flags
+        let showInterpretation = optExplain || optSecurity
+        let showBackendReady = optBackendReady || optSecurity
+        let showTrustPosture = optTrustPosture || optSecurity
+        semanticPrintAttestation(base64: b64, colorized: colorized, showInterpretation: showInterpretation, showBackendReady: showBackendReady, showTrustPosture: showTrustPosture)
     }
 
 case "selftest":
@@ -112,7 +157,7 @@ case "selftest":
         print("  base64 decode OK (len=\(d.count))")
         print("  no DeviceCheck linkage")
         print("  deterministic CLI path OK")
-        exit(0)
+        exit(ExitCode.success.rawValue)
     } else {
         fatalError("Self-test failed")
     }
@@ -123,10 +168,13 @@ case "annotate":
 case "analyze":
     handleAnalyzeCommand(args: args, optJSON: optJSON, optVerbose: optVerbose)
 
+case "diff":
+    handleDiffCommand(args: args, optJSON: optJSON, colorized: !optNoColor && isTTY())
+
 default:
     print("Unknown mode: \(mode)\n")
     printUsage()
-    exit(1)
+    exit(ExitCode.malformedInput.rawValue)
 }
 
 // MARK: - Utilities
@@ -158,17 +206,17 @@ func readBase64Input(args: [String]) -> String {
     guard !data.isEmpty else {
         printError("Error: No input provided")
         printError("  Please provide input via --base64, --file, or STDIN")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     }
     guard let s = String(data: data, encoding: .utf8) else {
         printError("Error: Failed to read STDIN as UTF-8")
         printError("  Input must be valid UTF-8 text")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     }
     let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else {
         printError("Error: STDIN input is empty after trimming whitespace")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     }
     return trimmed
 }
@@ -180,21 +228,21 @@ func readFile(_ path: String) -> String {
     guard FileManager.default.fileExists(atPath: path) else {
         printError("Error: File not found: \(path)")
         printError("  Please check the file path and try again.")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     }
     
     // Try to read the file
     guard let s = try? String(contentsOf: url, encoding: .utf8) else {
         printError("Error: Failed to read file: \(path)")
         printError("  The file may not be readable or may not be valid UTF-8.")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     }
     
     let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else {
         printError("Error: File is empty: \(path)")
         printError("  The file exists but contains no data.")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     }
     
     return trimmed
@@ -222,7 +270,7 @@ func hexDump(_ data: Data, bytesPerLine: Int = 16) -> String {
 }
 
 // MARK: - Version
-let CLI_VERSION = "1.0.0"
+let CLI_VERSION = "0.1.0"
 
 // MARK: - Dispatch
 
@@ -278,15 +326,15 @@ func decodeAttestation(_ data: Data) {
     } catch let error as CBORDecodingError {
         printError("Error: CBOR decoding failed")
         printError("  \(error)")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     } catch let error as AttestationError {
         printError("Error: Attestation object validation failed")
         printError("  \(error)")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     } catch {
         printError("Error: Unexpected error during attestation decoding")
         printError("  \(error) (\(type(of: error)))")
-        exit(1)
+        exit(ExitCode.internalError.rawValue)
     }
 }
 
@@ -309,7 +357,7 @@ func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool,
     
     guard !trimmedBase64.isEmpty else {
         printError("Error: Empty base64 string")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     }
     
     guard let data = Data(base64Encoded: trimmedBase64) else {
@@ -317,13 +365,13 @@ func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool,
         printError("  Base64 length: \(trimmedBase64.count) characters")
         printError("  First 50 chars: \(String(trimmedBase64.prefix(50)))")
         printError("  Last 50 chars: \(String(trimmedBase64.suffix(50)))")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     }
     
     guard data.count > 0 else {
         printError("Error: Decoded data is empty")
         printError("  Base64 length: \(trimmedBase64.count) characters")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     }
     
     let decoder = AppAttestDecoder(teamID: nil)
@@ -361,15 +409,103 @@ func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool,
         printError("  This usually means the attestation data is truncated or corrupted")
         printError("  Base64 length: \(trimmedBase64.count) characters")
         printError("  Decoded data length: \(data.count) bytes")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     } catch let error as AttestationError {
         printError("Error: Attestation parsing failed")
         printError("  \(error)")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     } catch {
         printError("Error: \(error)")
         printError("  Type: \(type(of: error))")
+        exit(ExitCode.internalError.rawValue)
+    }
+}
+
+func losslessTreePrintAttestation(base64: String, colorized: Bool = false) {
+    // Helper to print to stderr
+    func printError(_ message: String) {
+        let data = (message + "\n").data(using: .utf8)!
+        FileHandle.standardError.write(data)
+    }
+    
+    // Decode base64
+    guard let data = Data(base64Encoded: base64) else {
+        printError("Error: Invalid base64 string")
+        printError("  Base64 string length: \(base64.count) characters")
         exit(1)
+    }
+    
+    // Decode attestation object
+    let decoder = AppAttestDecoder(teamID: nil)
+    do {
+        let attestation = try decoder.decodeAttestationObject(data)
+        
+        // Dump lossless tree
+        let dumper = LosslessTreeDumper(colorized: colorized)
+        let output = dumper.dump(attestation)
+        
+        // Check for output path env var
+        if let outputPath = ProcessInfo.processInfo.environment["AA_OUTPUT_PATH"] {
+            try? output.write(toFile: outputPath, atomically: true, encoding: .utf8)
+            print("Lossless tree dump written to: \(outputPath)")
+        } else {
+            print(output)
+        }
+        
+    } catch let error as CBORDecodingError {
+        printError("Error: CBOR decoding failed")
+        printError("  \(error)")
+        exit(ExitCode.malformedInput.rawValue)
+    } catch let error as AttestationError {
+        printError("Error: Attestation object validation failed")
+        printError("  \(error)")
+        exit(ExitCode.malformedInput.rawValue)
+    } catch {
+        printError("Error: Unexpected error during attestation decoding")
+        printError("  \(error) (\(type(of: error)))")
+        exit(ExitCode.internalError.rawValue)
+    }
+}
+
+func semanticPrintAttestation(base64: String, colorized: Bool = false, showInterpretation: Bool = false, showBackendReady: Bool = false, showTrustPosture: Bool = false) {
+    // Helper to print to stderr
+    func printError(_ message: String) {
+        let data = (message + "\n").data(using: .utf8)!
+        FileHandle.standardError.write(data)
+    }
+    
+    // Decode base64
+    guard let data = Data(base64Encoded: base64) else {
+        printError("Error: Invalid base64 string")
+        printError("  Base64 string length: \(base64.count) characters")
+        exit(1)
+    }
+    
+    // Decode attestation object
+    let decoder = AppAttestDecoder(teamID: nil)
+    do {
+        let attestation = try decoder.decodeAttestationObject(data)
+        
+        // Build semantic model
+        let model = try attestation.buildSemanticModel()
+        
+        // Print using semantic printer
+        let printer = SemanticPrinter(colorized: colorized, showInterpretation: showInterpretation, showBackendReady: showBackendReady, showTrustPosture: showTrustPosture)
+        let output = printer.print(model)
+        print(output)
+        
+    } catch let error as CBORDecodingError {
+        printError("Error: CBOR decoding failed")
+        printError("  \(error)")
+        exit(ExitCode.malformedInput.rawValue)
+    } catch let error as AttestationError {
+        printError("Error: Attestation object validation failed")
+        printError("  \(error)")
+        exit(ExitCode.malformedInput.rawValue)
+    } catch {
+        printError("Error: Unexpected error during attestation decoding")
+        printError("  \(error) (\(type(of: error)))")
+        exit(ExitCode.internalError.rawValue)
     }
 }
 
@@ -384,7 +520,7 @@ func prettyPrintAttestation(base64: String, verbose: Bool = false, colorized: Bo
     guard let data = Data(base64Encoded: base64) else {
         printError("Error: Invalid base64 string")
         printError("  Base64 string length: \(base64.count) characters")
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     }
     
     if verbose {
@@ -408,14 +544,14 @@ func prettyPrintAttestation(base64: String, verbose: Bool = false, colorized: Bo
             printError("  Data length: \(data.count) bytes")
             printError("  Base64 length: \(base64.count) characters")
         }
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     } catch let error as AttestationError {
         printError("Error: Attestation object validation failed")
         printError("  \(error)")
         if verbose {
             printError("  Data length: \(data.count) bytes")
         }
-        exit(1)
+        exit(ExitCode.malformedInput.rawValue)
     } catch {
         printError("Error: Unexpected error during attestation decoding")
         printError("  \(error) (\(type(of: error)))")
@@ -673,6 +809,134 @@ func handleAnalyzeCommand(args: [String], optJSON: Bool, optVerbose: Bool) {
     } catch {
         printError("Error: Failed to analyze samples: \(error)")
         exit(1)
+    }
+}
+
+func handleDiffCommand(args: [String], optJSON: Bool, colorized: Bool) {
+    // Extract two base64 inputs
+    var leftB64: String?
+    var rightB64: String?
+    
+    // Try --left and --right
+    if let i = args.firstIndex(of: "--left"), args.count > i + 1 {
+        leftB64 = args[i + 1].trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    if let i = args.firstIndex(of: "--right"), args.count > i + 1 {
+        rightB64 = args[i + 1].trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    // Try --left-file and --right-file
+    if let i = args.firstIndex(of: "--left-file"), args.count > i + 1 {
+        leftB64 = readFile(args[i + 1]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    if let i = args.firstIndex(of: "--right-file"), args.count > i + 1 {
+        rightB64 = readFile(args[i + 1]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    guard let left = leftB64, let right = rightB64 else {
+        printError("Error: diff requires --left and --right (or --left-file and --right-file)")
+        printError("  Example: diff --left-file attest1.b64 --right-file attest2.b64")
+        exit(1)
+    }
+    
+    do {
+        // Decode both attestations
+        guard let leftData = Data(base64Encoded: left) else {
+            printError("Error: Invalid base64 in left attestation")
+            exit(1)
+        }
+        guard let rightData = Data(base64Encoded: right) else {
+            printError("Error: Invalid base64 in right attestation")
+            exit(1)
+        }
+        
+        let decoder = AppAttestDecoder(teamID: nil)
+        let leftAttestation = try decoder.decodeAttestationObject(leftData)
+        let rightAttestation = try decoder.decodeAttestationObject(rightData)
+        
+        let leftModel = try leftAttestation.buildSemanticModel()
+        let rightModel = try rightAttestation.buildSemanticModel()
+        
+        // Compute diff
+        let diff = AttestationDiff.diff(leftModel, rightModel)
+        
+        if optJSON {
+            // JSON output
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let json = try encoder.encode(diff)
+            print(String(data: json, encoding: .utf8)!)
+        } else {
+            // Human-readable side-by-side diff
+            printDiff(diff, colorized: colorized)
+        }
+    } catch {
+        printError("Error: Failed to diff attestations: \(error)")
+        exit(1)
+    }
+}
+
+func printDiff(_ diff: DiffResult, colorized: Bool) {
+    let reset = colorized ? "\u{001B}[0m" : ""
+    let added = colorized ? "\u{001B}[32m" : ""  // Green
+    let removed = colorized ? "\u{001B}[31m" : ""  // Red
+    let header = colorized ? "\u{001B}[1;37m" : ""  // Bold white
+    
+    print("\(header)ATTESTATION DIFF\(reset)\n")
+    
+    if !diff.hasDifferences {
+        print("No differences found. Attestations are identical.\n")
+        return
+    }
+    
+    // Identity
+    if diff.identity.status == .different {
+        print("\(header)IDENTITY\(reset)")
+        for change in diff.identity.changes {
+            print("  \(removed)-\(reset) \(change.field): \(change.left)")
+            print("  \(added)+\(reset) \(change.field): \(change.right)")
+        }
+        print("")
+    }
+    
+    // Credential
+    if diff.credential.status == .different {
+        print("\(header)CREDENTIAL\(reset)")
+        for change in diff.credential.changes {
+            print("  \(removed)-\(reset) \(change.field): \(change.left)")
+            print("  \(added)+\(reset) \(change.field): \(change.right)")
+        }
+        print("")
+    }
+    
+    // Trust Chain
+    if diff.trustChain.status == .different {
+        print("\(header)TRUST CHAIN\(reset)")
+        for change in diff.trustChain.changes {
+            print("  \(removed)-\(reset) \(change.field): \(change.left)")
+            print("  \(added)+\(reset) \(change.field): \(change.right)")
+        }
+        print("")
+    }
+    
+    // Platform Claims
+    if diff.platformClaims.status == .different {
+        print("\(header)PLATFORM CLAIMS\(reset)")
+        for change in diff.platformClaims.changes {
+            print("  \(removed)-\(reset) \(change.field): \(change.left)")
+            print("  \(added)+\(reset) \(change.field): \(change.right)")
+        }
+        print("")
+    }
+    
+    // Receipt
+    if diff.receipt.status == .different {
+        print("\(header)RECEIPT\(reset)")
+        for change in diff.receipt.changes {
+            print("  \(removed)-\(reset) \(change.field): \(change.left)")
+            print("  \(added)+\(reset) \(change.field): \(change.right)")
+        }
+        print("")
     }
 }
 

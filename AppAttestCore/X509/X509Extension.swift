@@ -50,7 +50,18 @@ public enum X509Extension {
     ///   - oid: The extension OID
     ///   - rawValue: The raw DER bytes of the extension value
     /// - Returns: Decoded extension, or unknown if decoding fails
+    /// - Note: Always returns a valid extension (never crashes). Unknown or failed decodings are preserved.
     public static func decode(oid: String, rawValue: Data) -> X509Extension {
+        // Defensive: validate inputs
+        guard !oid.isEmpty else {
+            return .unknown(oid: "", raw: rawValue)
+        }
+        
+        // Defensive: limit raw value size to prevent DoS (max 10 MB)
+        guard rawValue.count <= 10 * 1024 * 1024 else {
+            return .unknown(oid: oid, raw: Data())  // Preserve OID but truncate huge raw data
+        }
+        
         do {
             switch oid {
             case X509OID.basicConstraints:
@@ -73,6 +84,7 @@ public enum X509Extension {
             }
         } catch {
             // If decoding fails, preserve as unknown with raw data
+            // This ensures we never lose information, even if parsing fails
             return .unknown(oid: oid, raw: rawValue)
         }
     }

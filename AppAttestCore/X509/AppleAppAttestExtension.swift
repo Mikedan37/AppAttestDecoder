@@ -51,7 +51,27 @@ public struct AppleAppAttestExtension {
     }
     
     /// Decode an Apple extension from OID and raw value
+    /// - Parameters:
+    ///   - oid: The extension OID
+    ///   - rawValue: The raw DER bytes
+    /// - Returns: Decoded extension
+    /// - Throws: ASN1Error if decoding fails
+    /// - Note: Defensive checks prevent crashes on malformed data
     public static func decode(oid: String, rawValue: Data) throws -> AppleAppAttestExtension {
+        // Defensive: validate inputs
+        guard !oid.isEmpty else {
+            throw ASN1Error.invalidData
+        }
+        
+        guard !rawValue.isEmpty else {
+            throw ASN1Error.truncated
+        }
+        
+        // Defensive: limit raw value size (max 10 MB)
+        guard rawValue.count <= 10 * 1024 * 1024 else {
+            throw ASN1Error.malformedStructure("Extension raw value too large: \(rawValue.count) bytes")
+        }
+        
         let type: ExtensionType
         
         switch oid {
@@ -108,33 +128,60 @@ public struct AppleAppAttestExtension {
     }
     
     private static func decodeEnvironment(_ data: Data) throws -> ExtensionType {
+        guard !data.isEmpty else {
+            throw ASN1Error.truncated
+        }
+        
         var reader = ASN1Reader(data)
         let oct = try reader.expectTag(.octetString)
         let envData = reader.data.subdata(in: oct.valueRange)
         
-        if let env = String(data: envData, encoding: .utf8) {
+        // Defensive: limit string length (max 256 bytes for environment)
+        guard envData.count <= 256 else {
+            throw ASN1Error.malformedStructure("Environment string too long: \(envData.count) bytes")
+        }
+        
+        if let env = String(data: envData, encoding: .utf8), !env.isEmpty {
             return .environment(env)
         }
         throw ASN1Error.invalidData
     }
     
     private static func decodeOSVersion(_ data: Data) throws -> ExtensionType {
+        guard !data.isEmpty else {
+            throw ASN1Error.truncated
+        }
+        
         var reader = ASN1Reader(data)
         let oct = try reader.expectTag(.octetString)
         let versionData = reader.data.subdata(in: oct.valueRange)
         
-        if let version = String(data: versionData, encoding: .utf8) {
+        // Defensive: limit string length (max 64 bytes for version)
+        guard versionData.count <= 64 else {
+            throw ASN1Error.malformedStructure("OS version string too long: \(versionData.count) bytes")
+        }
+        
+        if let version = String(data: versionData, encoding: .utf8), !version.isEmpty {
             return .osVersion(version)
         }
         throw ASN1Error.invalidData
     }
     
     private static func decodeDeviceClass(_ data: Data) throws -> ExtensionType {
+        guard !data.isEmpty else {
+            throw ASN1Error.truncated
+        }
+        
         var reader = ASN1Reader(data)
         let oct = try reader.expectTag(.octetString)
         let classData = reader.data.subdata(in: oct.valueRange)
         
-        if let deviceClass = String(data: classData, encoding: .utf8) {
+        // Defensive: limit string length (max 64 bytes for device class)
+        guard classData.count <= 64 else {
+            throw ASN1Error.malformedStructure("Device class string too long: \(classData.count) bytes")
+        }
+        
+        if let deviceClass = String(data: classData, encoding: .utf8), !deviceClass.isEmpty {
             return .deviceClass(deviceClass)
         }
         throw ASN1Error.invalidData
@@ -235,8 +282,4 @@ public struct AppleAppAttestReceipt {
     }
 }
 
-// MARK: - ASN1Error Extension
-
-extension ASN1Error {
-    static let invalidData = ASN1Error.expected("invalid extension data")
-}
+// Note: ASN1Error.invalidData is now a proper enum case (added in ASN1Error.swift)

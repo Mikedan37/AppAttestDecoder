@@ -118,23 +118,63 @@ public struct ASN1Reader {
         let tlv = try expectTag(.oid)
         let bytes = [UInt8](data.subdata(in: tlv.valueRange))
         guard !bytes.isEmpty else { throw ASN1Error.invalidOID }
+        
+        // Defensive: limit OID length to prevent DoS (RFC 5280 allows up to 128 bytes, but be conservative)
+        guard bytes.count <= 256 else {
+            throw ASN1Error.malformedStructure("OID too long: \(bytes.count) bytes (max 256)")
+        }
 
         let first = Int(bytes[0])
         let a = first / 40
         let b = first % 40
         var arcs: [Int] = [a, b]
+        
+        // Defensive: limit number of arcs to prevent excessive memory allocation
+        let maxArcs = 128
+        guard arcs.count <= maxArcs else {
+            throw ASN1Error.malformedStructure("OID has too many arcs: \(arcs.count) (max \(maxArcs))")
+        }
 
-        var value = 0
+        var value: Int64 = 0  // Use Int64 to prevent overflow
         var started = false
+        var arcCount = 2  // Already have first two arcs
+        
         for byte in bytes.dropFirst() {
             started = true
-            value = (value << 7) | Int(byte & 0x7F)
+            
+            // Defensive: check for integer overflow before shifting
+            guard value <= (Int64.max >> 7) else {
+                throw ASN1Error.malformedStructure("OID arc value overflow")
+            }
+            
+            value = (value << 7) | Int64(byte & 0x7F)
+            
             if (byte & 0x80) == 0 {
-                arcs.append(value)
+                // Defensive: limit number of arcs
+                guard arcCount < maxArcs else {
+                    throw ASN1Error.malformedStructure("OID has too many arcs")
+                }
+                
+                // Defensive: check arc value is within reasonable bounds
+                guard value <= Int64(Int.max) else {
+                    throw ASN1Error.malformedStructure("OID arc value too large")
+                }
+                
+                arcs.append(Int(value))
                 value = 0
+                arcCount += 1
             }
         }
-        if started && value != 0 { throw ASN1Error.invalidOID }
+        
+        if started && value != 0 {
+            throw ASN1Error.invalidOID
+        }
+        
+        // Defensive: ensure we have at least 2 arcs (minimum valid OID)
+        guard arcs.count >= 2 else {
+            throw ASN1Error.invalidOID
+        }
+        
         return arcs.map(String.init).joined(separator: ".")
     }
 

@@ -1,6 +1,6 @@
 # Pretty Command - Working Example
 
-## ✅ It Works!
+## It Works!
 
 The `pretty` command works correctly. The implementation is solid. The only issue is **command invocation format**.
 
@@ -79,32 +79,32 @@ This contains a complete, valid App Attest attestation object from the test suit
 ## Verification
 
 The command works because:
-1. ✅ Base64 decoding succeeds
-2. ✅ CBOR parsing succeeds  
-3. ✅ Attestation structure validation passes
-4. ✅ Pretty print formatting is applied
-5. ✅ Output is printed to stdout
+1. Base64 decoding succeeds
+2. CBOR parsing succeeds  
+3. Attestation structure validation passes
+4. Pretty print formatting is applied
+5. Output is printed to stdout
 
 ## Common Mistakes (Fixed)
 
-❌ **Wrong**: `./AppAttestDecoderCLI pretty "BASE64_STRING"`  
+**Wrong**: `./AppAttestDecoderCLI pretty "BASE64_STRING"`  
    → This silently exits because no `--base64` or `--file` flag is provided
 
-✅ **Right**: `./AppAttestDecoderCLI pretty --base64 "BASE64_STRING"`
+**Right**: `./AppAttestDecoderCLI pretty --base64 "BASE64_STRING"`
 
-✅ **Also Right**: `cat attestation.txt | ./AppAttestDecoderCLI pretty`  
+**Also Right**: `cat attestation.txt | ./AppAttestDecoderCLI pretty`  
    → This is the cleanest Unix-style approach
 
-❌ **Wrong**: Running binary directly from `.build/` folder (framework linking issue)  
-✅ **Right**: Run from Xcode scheme (handles framework rpath automatically)
+**Wrong**: Running binary directly from `.build/` folder (framework linking issue)  
+**Right**: Run from Xcode scheme (handles framework rpath automatically)
 
 ## Why This Is Actually Good
 
 Strict argument parsing means:
-- ✅ Your CLI is structured correctly
-- ✅ No "magic" commands that guess what you meant
-- ✅ Clear, predictable behavior
-- ✅ Professional tool design
+- Your CLI is structured correctly
+- No "magic" commands that guess what you meant
+- Clear, predictable behavior
+- Professional tool design
 
 This is exactly how serious developer tools behave.
 

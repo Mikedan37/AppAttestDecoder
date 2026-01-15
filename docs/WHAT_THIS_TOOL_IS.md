@@ -40,8 +40,20 @@ This tool provides x-ray vision into App Attest attestation objects and assertio
 ### What It Doesn't Do
 
 - **No signature verification** - Signatures are preserved and labeled [OPAQUE]
+  - You must verify `attStmt.signature` over `authenticatorData || SHA256(clientDataHash)`
+  - You must verify receipt CMS signatures
+  - See `docs/VERIFICATION_GUIDE.md` for implementation details
+
 - **No certificate chain validation** - Certificates are parsed, not validated
+  - You must verify chain anchors to Apple Root CA G3
+  - You must check expiration dates
+  - You must validate Extended Key Usage
+
 - **No trust decisions** - This is inspection, not validation
+  - You must implement RP ID hash validation
+  - You must implement public key consistency checks
+  - You must implement replay protection
+
 - **No magic** - Undocumented fields are preserved, not interpreted
 
 ## Philosophy
@@ -65,12 +77,43 @@ It's what you use when:
 - You need to understand what actually happened
 - You're tired of guessing
 
-Good companies recognize this as:
-- Platform security tooling
-- Infrastructure work
-- Making systems observable
-- Thinking like an auditor
+This type of tooling is used for:
+- Platform security work
+- Infrastructure observability
+- Forensic analysis
+- Audit and compliance
 
-Mediocre companies will ask "why so much output."
+## Architecture: Three Modes, No Overlap
 
-Those companies are not your audience.
+The tool provides three distinct output modes:
+
+1. **Semantic (default)**: What does this attestation claim?
+   - Clean, scannable, collapsed hex
+   - Human-readable in <10 seconds
+   - Zero noise
+
+2. **Forensic**: Prove it.
+   - Grouped raw bytes
+   - Hex + base64
+   - Extension payloads
+   - Auditable
+
+3. **Lossless Tree**: Show me literally everything.
+   - Every CBOR node
+   - Every ASN.1 TLV
+   - Paths, offsets, lengths
+   - Byte accounting
+
+This separation is intentional. No single view can be both readable and complete.
+
+## Philosophy
+
+For the design philosophy and "why" behind this tool, see `docs/DESIGN_PHILOSOPHY.md`.
+
+## Next Steps
+
+- **For inspection:** Use semantic or forensic modes
+- **For on-device inspection in iOS app:** See `docs/IOS_ON_DEVICE_INSPECTION.md`
+- **For verification:** See `docs/VERIFICATION_GUIDE.md`
+- **For all commands:** See `docs/CLI_Argument_Paths.md`
+- **For project status:** See `docs/PROJECT_STATUS.md`

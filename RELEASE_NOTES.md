@@ -1,74 +1,39 @@
-# AppAttestDecoder v1.0.0 Release Notes
+# Release Notes
 
-## What It Is
+## Why This Exists
 
-AppAttestDecoder is a Swift library and command-line tool for decoding Apple App Attest attestation and assertion artifacts. It parses CBOR-encoded structures and extracts their components into readable formats (JSON, pretty-print, hex dump).
+This tool exists because:
 
-## What It Is NOT
+1. App Attest artifacts are CBOR-encoded binary blobs that are difficult to inspect without specialized tooling.
 
-- **A Validator**: Does NOT verify cryptographic signatures
-- **A Security Tool**: Does NOT perform certificate chain validation
-- **A Production Validator**: Does NOT verify RP ID hashes or nonces
-- **A Complete Parser**: The internal ASN.1, CBOR, COSE, and X.509 parsers are purpose-built for App Attest artifacts only, not general-purpose use
+2. Server-side validation requires parsing CBOR, ASN.1, X.509, and COSE structures, which is non-trivial to implement correctly.
 
-This tool only decodes structure. For production use, you must implement complete server-side validation as described in Apple's [Attestation Object Validation Guide](https://developer.apple.com/documentation/devicecheck/validating_app_attest_assertions_and_attestations).
+3. Debugging attestation failures requires visibility into certificate extensions, platform claims, and receipt structures.
 
-## Supported Inputs
+4. Apple's documentation describes what to verify but not how to parse the structures to extract the data needed for verification.
 
-- **Attestation Objects**: Full App Attest attestation objects
-- **Assertion Objects**: App Attest assertion objects (COSE_Sign1 messages)
-- **Input Methods**: Base64 string, file, or STDIN
-- **Output Formats**: JSON, hex dump, raw base64, or pretty-print
+5. Certificate extensions contain important metadata (environment, OS version, device class) that must be extracted for policy decisions.
 
-## Features
+6. Receipts are CMS/PKCS#7 containers that require ASN.1 parsing to understand their structure.
 
-- CBOR decoding with support for Apple's non-standard encoding patterns
-- X.509 certificate extraction (parsing only, no validation)
-- Authenticator data parsing
-- Pretty-printing with optional colorization
-- Swift Package Manager support
-- Comprehensive test suite (28+ test methods)
-- Complete documentation
+7. Extensions and main apps generate separate attestations, which is often misunderstood without structural inspection.
 
-## Documentation
+8. OS upgrades can change attestation structure, and distinguishing "change" from "breakage" requires comparison tools.
 
-- [README.md](README.md) - Project overview and usage
-- [docs/HOW_TO_USE.md](docs/HOW_TO_USE.md) - Complete CLI usage guide
-- [docs/TEST_APP_GUIDE.md](docs/TEST_APP_GUIDE.md) - Guide for using companion test apps
-- [docs/QA_FLOW.md](docs/QA_FLOW.md) - Quality assurance procedures
-- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) - Contribution guidelines
-- [SECURITY.md](SECURITY.md) - Security policy and vulnerability reporting
+9. Incident response and forensic analysis require complete visibility into all fields, not just a boolean verdict.
 
-## Security Note
+10. This tool provides the parsing layer so you can focus on implementing verification and policy logic.
 
-**Non-Official Parser Scope**: The ASN.1, CBOR, COSE, and X.509 parsing logic in this project is NOT a complete implementation of the respective standards, is NOT a reference parser, and is NOT intended for general-purpose use. These parsers exist solely to decode structures required for App Attest artifacts. They do not perform cryptographic verification or enforce trust decisions.
+## What This Is Not
 
-This project is not affiliated with or endorsed by Apple.
+This tool is not:
+- A replacement for server-side verification
+- A security validator or trust authority
+- A simple "valid/invalid" checker
+- An attempt to reverse-engineer Apple's private fields
 
-## Installation
+It is an inspection and parsing tool that exposes raw materials for downstream validation.
 
-### Swift Package Manager
+## Version 0.1.0
 
-```swift
-dependencies: [
-    .package(url: "https://github.com/Mikedan37/AppAttestDecoder.git", from: "1.0.0")
-]
-```
-
-### From Source
-
-```bash
-git clone https://github.com/Mikedan37/AppAttestDecoder.git
-cd AppAttestDecoder
-xcodebuild -scheme AppAttestDecoderCLI -configuration Release
-```
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-**Release Date**: January 12, 2026  
-**Version**: 1.0.0
-
+Initial release. Core functionality complete. Scope locked. Ready for production use with appropriate server-side validation.

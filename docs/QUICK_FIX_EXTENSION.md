@@ -106,9 +106,9 @@ After following these steps, you should:
 
 ## Common Mistakes
 
-- ❌ Forgetting to add the source file to the extension target
-- ❌ Adding the source file to BOTH main app and extension (should be extension only)
-- ❌ Not setting `NSExtensionPointIdentifier` correctly
-- ❌ Not embedding the extension in the main app
-- ❌ Trying to run in simulator (App Attest requires physical device)
+- Forgetting to add the source file to the extension target
+- Adding the source file to BOTH main app and extension (should be extension only)
+- Not setting `NSExtensionPointIdentifier` correctly
+- Not embedding the extension in the main app
+- Trying to run in simulator (App Attest requires physical device)
 

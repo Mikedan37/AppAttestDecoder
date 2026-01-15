@@ -38,7 +38,7 @@ Lossless JSON export with:
 
 ## Privacy & Security Considerations
 
-⚠️ **Important**: When publishing outputs or sharing artifacts:
+**Important**: When publishing outputs or sharing artifacts:
 
 - **Redact identifiers**: Bundle IDs, Team IDs, key IDs, timestamps
 - **Use synthetic samples** for public documentation unless you're 100% sure it's safe
