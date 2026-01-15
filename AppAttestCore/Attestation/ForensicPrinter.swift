@@ -219,6 +219,59 @@ extension AttestationObject {
         output += transcript.field(name: "Format", value: format)
         output += "\n"
         
+        // Summary (quick orientation)
+        output += transcript.subsectionHeader("Summary")
+        
+        // Format
+        output += transcript.field(name: "Format", value: format)
+        
+        // Certificate chain
+        let chainLength = attestationStatement.x5c.count
+        output += transcript.field(name: "Certificate chain", value: "\(chainLength) certificate\(chainLength == 1 ? "" : "s")")
+        if chainLength > 0 {
+            let roles = chainLength == 1 ? "root" : chainLength == 2 ? "leaf, root" : "leaf, \(chainLength - 2) intermediate(s), root"
+            output += transcript.field(name: "  Chain structure", value: roles, indent: 2)
+        }
+        
+        // Receipt
+        let receiptPresent = (attestationStatement.rawCBOR.mapValue?.first(where: { key, _ in
+            if case .textString("receipt") = key { return true }
+            return false
+        }) != nil)
+        output += transcript.field(name: "Receipt present", value: receiptPresent ? "yes" : "no")
+        
+        // Attested credential
+        output += transcript.field(name: "Attested credential", value: authenticatorData.attestedCredentialData != nil ? "present" : "absent")
+        
+        // Environment (if decodable)
+        var environment: String? = nil
+        if let leafCertDER = attestationStatement.x5c.first,
+           let leafCert = try? X509Certificate.parse(der: leafCertDER) {
+            for (_, ext) in leafCert.decodedExtensions {
+                if case .appleOID(_, let appleExt) = ext {
+                    if case .environment(let env) = appleExt.type {
+                        environment = env
+                        break
+                    }
+                }
+            }
+        }
+        if let env = environment {
+            output += transcript.field(name: "Environment", value: env)
+        } else {
+            output += transcript.field(name: "Environment", value: "not decodable (see extensions)")
+        }
+        
+        // Extensions
+        var extensionCount = 0
+        if let leafCertDER = attestationStatement.x5c.first,
+           let leafCert = try? X509Certificate.parse(der: leafCertDER) {
+            extensionCount = leafCert.decodedExtensions.count
+        }
+        output += transcript.field(name: "Extensions", value: "\(extensionCount) extension\(extensionCount == 1 ? "" : "s") (preserved, not all interpreted)")
+        
+        output += "\n"
+        
         // 2. Raw CBOR (all of it)
         if let rawData = rawData {
             output += transcript.rawDataBlock(title: "CBOR RAW PAYLOAD", data: rawData, encoding: "CBOR")
@@ -278,19 +331,63 @@ extension AttestationObject {
         output += "2. \"attestationStatement\"\n"
         output += "   Format: \(format)\n\n"
         
+        // Algorithm
         if let alg = attestationStatement.alg {
             output += transcript.field(name: "Algorithm", value: "\(alg) (ES256)")
             output += transcript.field(name: "  COSE alg", value: "\(alg)", indent: 2)
             output += transcript.field(name: "  Meaning", value: "ES256", indent: 2)
+            output += transcript.field(name: "  Location", value: "attStmt map (extracted)", indent: 2)
         } else {
-            output += transcript.field(name: "Algorithm", value: "nil")
+            // Check if algorithm exists in rawCBOR but wasn't extracted
+            var algInRawCBOR = false
+            if case .map(let mapPairs) = attestationStatement.rawCBOR {
+                for (key, _) in mapPairs {
+                    if case .textString("alg") = key {
+                        algInRawCBOR = true
+                        break
+                    }
+                }
+            }
+            
+            if algInRawCBOR {
+                output += transcript.field(name: "Algorithm", value: "present in rawCBOR but not in standard location")
+                output += transcript.field(name: "  Note", value: "Apple may use non-standard key format; see rawCBOR structure below", indent: 2)
+            } else {
+                output += transcript.field(name: "Algorithm", value: "not present in attestation statement")
+                output += transcript.field(name: "  Note", value: "Apple App Attest uses certificate-based attestation; algorithm may be implicit", indent: 2)
+            }
         }
         
+        // Signature
         if !attestationStatement.signature.isEmpty {
             output += transcript.rawDataBlock(title: "SIGNATURE", data: attestationStatement.signature, encoding: "ECDSA")
-            output += transcript.field(name: "Status", value: "[OPAQUE] (not interpreted)")
+            output += transcript.field(name: "Status", value: "[OPAQUE] (cryptographic signature, not interpreted at forensic layer)")
+            output += transcript.field(name: "  Location", value: "attStmt map (extracted)", indent: 2)
+            output += transcript.field(name: "  Purpose", value: "ECDSA signature over authenticatorData || clientDataHash", indent: 2)
+            output += transcript.field(name: "  Verification", value: "requires validated certificate chain (not performed here)", indent: 2)
         } else {
-            output += transcript.field(name: "Signature", value: "empty")
+            // Check if signature exists in rawCBOR but wasn't extracted
+            var sigInRawCBOR = false
+            if case .map(let mapPairs) = attestationStatement.rawCBOR {
+                for (key, value) in mapPairs {
+                    if case .textString("sig") = key, case .byteString = value {
+                        sigInRawCBOR = true
+                        break
+                    }
+                    if case .textString("signature") = key, case .byteString = value {
+                        sigInRawCBOR = true
+                        break
+                    }
+                }
+            }
+            
+            if sigInRawCBOR {
+                output += transcript.field(name: "Signature", value: "present in rawCBOR but not in standard location")
+                output += transcript.field(name: "  Note", value: "Apple may use non-standard key format; see rawCBOR structure below", indent: 2)
+            } else {
+                output += transcript.field(name: "Signature", value: "not present in attestation statement")
+                output += transcript.field(name: "  Note", value: "Apple App Attest uses certificate-based attestation; signature verification uses certificate chain", indent: 2)
+            }
         }
         
         // Certificate Chain
