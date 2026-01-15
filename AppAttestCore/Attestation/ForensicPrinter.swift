@@ -302,14 +302,11 @@ extension AttestationObject {
         
         // Attested Credential Data
         if let credData = authenticatorData.attestedCredentialData {
-            output += transcript.subsectionHeader("ATTESTED CREDENTIAL DATA")
-            
-            output += transcript.rawDataBlock(title: "AAGUID", data: credData.aaguid, encoding: "UUID")
-            
-            output += transcript.rawDataBlock(title: "CREDENTIAL ID", data: credData.credentialId, encoding: "byte string")
+            var credDataContent = ""
+            credDataContent += transcript.twoColumnField(key: "AAGUID", value: "[\(credData.aaguid.count) bytes]")
+            credDataContent += transcript.twoColumnField(key: "CREDENTIAL ID", value: "[\(credData.credentialId.count) bytes]")
             
             // Credential Public Key (COSE Key - decoded)
-            var coseKeyContent = ""
             if case .map(let pairs) = credData.credentialPublicKey {
                 // Decode COSE key map to named fields
                 var kty: String? = nil
@@ -334,56 +331,56 @@ extension AttestationObject {
                     }
                 }
                 
-                coseKeyContent += transcript.twoColumnField(key: "kty", value: kty ?? "unknown")
+                credDataContent += "\n"
+                credDataContent += transcript.twoColumnField(key: "kty", value: kty ?? "unknown")
                 if let alg = alg {
-                    coseKeyContent += transcript.twoColumnField(key: "alg", value: alg)
+                    credDataContent += transcript.twoColumnField(key: "alg", value: alg)
                 }
                 if let crv = crv {
-                    coseKeyContent += transcript.twoColumnField(key: "crv", value: crv)
+                    credDataContent += transcript.twoColumnField(key: "crv", value: crv)
                 }
                 if let x = x {
-                    coseKeyContent += transcript.twoColumnField(key: "x", value: "[\(x.count) bytes]")
+                    credDataContent += transcript.twoColumnField(key: "x", value: "[\(x.count) bytes]")
                 }
                 if let y = y {
-                    coseKeyContent += transcript.twoColumnField(key: "y", value: "[\(y.count) bytes]")
+                    credDataContent += transcript.twoColumnField(key: "y", value: "[\(y.count) bytes]")
                 }
             }
             
-            output += transcript.boxedSection("CREDENTIAL PUBLIC KEY", content: coseKeyContent)
+            output += transcript.boxedSection("ATTESTED CREDENTIAL DATA", content: credDataContent)
+            
+            // Raw bytes collected for end (if showRaw)
+            transcript.addRawDataBlock(title: "AAGUID", data: credData.aaguid, encoding: "UUID")
+            transcript.addRawDataBlock(title: "CREDENTIAL ID", data: credData.credentialId, encoding: "byte string")
         }
         
         // Extensions
         if let extensions = authenticatorData.extensions {
-            output += transcript.subsectionHeader("EXTENSIONS")
-            output += transcriptPrintCBORValue(extensions, transcript: &transcript, indent: 0)
+            let extContent = transcript.twoColumnField(key: "EXTENSIONS", value: "present (CBOR-encoded)")
+            output += transcript.boxedSection("EXTENSIONS", content: extContent)
         }
         
         // Attestation Statement
-        output += transcript.sectionHeader("ATTESTATION STATEMENT")
-        
-        output += "2. \"attestationStatement\"\n"
-        output += "   Format: \(format)\n\n"
-        
-        // Attestation Statement Summary
-        output += transcript.sectionTitle("Attestation Statement")
-        output += "  Summary:\n"
+        var attStmtContent = ""
         
         // Algorithm
         if let alg = attestationStatement.alg {
-            output += transcript.field(name: "    Algorithm", value: "\(alg) (ES256)", indent: 4, symbol: ForensicTranscriptPrinter.StatusSymbol.decoded)
+            attStmtContent += transcript.twoColumnField(key: "ALGORITHM", value: "\(alg) (ES256)")
         } else {
-            output += transcript.field(name: "    Algorithm", value: "Implicit (certificate-based attestation)", indent: 4, symbol: ForensicTranscriptPrinter.StatusSymbol.opaque)
+            attStmtContent += transcript.twoColumnField(key: "ALGORITHM", value: "Implicit (certificate-based attestation)")
         }
         
         // Signature
         if !attestationStatement.signature.isEmpty {
-            output += transcript.field(name: "    Signature", value: "ECDSA signature (opaque, not interpreted)", indent: 4, symbol: ForensicTranscriptPrinter.StatusSymbol.cryptographic)
-            output += transcript.bulletPoint("Location: attStmt map (extracted)", indent: 6)
-            output += transcript.bulletPoint("Purpose: ECDSA signature over authenticatorData || clientDataHash", indent: 6)
-            output += transcript.bulletPoint("Verification: requires validated certificate chain (not performed here)", indent: 6)
+            attStmtContent += transcript.twoColumnField(key: "SIGNATURE", value: "🔒 ECDSA signature (opaque, not interpreted)")
+            attStmtContent += transcript.bulletPoint("Location: attStmt map (extracted)", indent: 2)
+            attStmtContent += transcript.bulletPoint("Purpose: ECDSA signature over authenticatorData || clientDataHash", indent: 2)
+            attStmtContent += transcript.bulletPoint("Verification: requires validated certificate chain (not performed here)", indent: 2)
         } else {
-            output += transcript.field(name: "    Signature", value: "Not present (certificate-based attestation)", indent: 4, symbol: ForensicTranscriptPrinter.StatusSymbol.opaque)
+            attStmtContent += transcript.twoColumnField(key: "SIGNATURE", value: "◻ Not present (certificate-based attestation)")
         }
+        
+        output += transcript.boxedSection("ATTESTATION STATEMENT", content: attStmtContent)
         
         // Raw bytes collected for end (if showRaw)
         if !attestationStatement.signature.isEmpty {
@@ -466,8 +463,8 @@ extension AttestationObject {
                return false
            })?.1,
            case .byteString(let receiptData) = receiptValue {
-            output += transcript.sectionTitle("Receipt")
-            output += transcript.twoColumnField(key: "RECEIPT", value: "present (\(receiptData.count) bytes)")
+            let receiptContent = transcript.twoColumnField(key: "RECEIPT", value: "present (\(receiptData.count) bytes)")
+            output += transcript.boxedSection("RECEIPT", content: receiptContent)
             // Raw bytes collected for end (if showRaw)
             transcript.addRawDataBlock(title: "Receipt", data: receiptData, encoding: "CBOR")
         }
@@ -543,42 +540,37 @@ extension AttestationObject {
         
         switch appleExt.type {
         case .challenge(let hash):
-            output += transcript.field(name: "type", value: "challenge", indent: indent)
-            output += transcript.fieldWithRaw(name: "hash", decoded: "SHA-256", raw: hash, encoding: "SHA256", indent: indent)
+            output += transcript.bulletPoint("hash: SHA-256 (\(hash.count) bytes)", indent: indent)
         case .receipt(let receipt):
-            output += transcript.field(name: "type", value: "receipt", indent: indent)
             if let bundleID = receipt.bundleID {
-                output += transcript.field(name: "bundleID", value: bundleID, indent: indent)
+                output += transcript.bulletPoint("bundleID: \(bundleID)", indent: indent)
             }
             if let teamID = receipt.teamID {
-                output += transcript.field(name: "teamID", value: teamID, indent: indent)
+                output += transcript.bulletPoint("teamID: \(teamID)", indent: indent)
             }
             if let appVersion = receipt.appVersion {
-                output += transcript.field(name: "appVersion", value: appVersion, indent: indent)
+                output += transcript.bulletPoint("appVersion: \(appVersion)", indent: indent)
             }
             if let creationDate = receipt.receiptCreationDate {
                 let formatter = ISO8601DateFormatter()
-                output += transcript.field(name: "receiptCreationDate", value: formatter.string(from: creationDate), indent: indent)
+                formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
+                output += transcript.bulletPoint("receiptCreationDate: \(formatter.string(from: creationDate))", indent: indent)
             }
             if let expirationDate = receipt.receiptExpirationDate {
                 let formatter = ISO8601DateFormatter()
-                output += transcript.field(name: "receiptExpirationDate", value: formatter.string(from: expirationDate), indent: indent)
+                formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
+                output += transcript.bulletPoint("receiptExpirationDate: \(formatter.string(from: expirationDate))", indent: indent)
             }
         case .keyPurpose(let purpose):
-            output += transcript.field(name: "type", value: "keyPurpose", indent: indent)
-            output += transcript.field(name: "purpose", value: purpose, indent: indent)
+            output += transcript.bulletPoint("purpose: \(purpose)", indent: indent)
         case .environment(let env):
-            output += transcript.field(name: "type", value: "environment", indent: indent)
-            output += transcript.field(name: "value", value: env, indent: indent)
+            output += transcript.bulletPoint("environment: \(env)", indent: indent)
         case .osVersion(let version):
-            output += transcript.field(name: "type", value: "osVersion", indent: indent)
-            output += transcript.field(name: "value", value: version, indent: indent)
+            output += transcript.bulletPoint("osVersion: \(version)", indent: indent)
         case .deviceClass(let deviceClass):
-            output += transcript.field(name: "type", value: "deviceClass", indent: indent)
-            output += transcript.field(name: "value", value: deviceClass, indent: indent)
+            output += transcript.bulletPoint("deviceClass: \(deviceClass)", indent: indent)
         case .unknown(_, let raw):
-            output += transcript.field(name: "type", value: "unknown", indent: indent)
-            output += transcript.rawDataBlock(title: "Raw Value", data: raw, encoding: "DER")
+            output += transcript.bulletPoint("Opaque (\(raw.count) bytes, raw DER preserved)", indent: indent)
         }
         
         return output

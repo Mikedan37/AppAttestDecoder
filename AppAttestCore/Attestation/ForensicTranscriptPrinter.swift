@@ -46,7 +46,7 @@ struct ForensicTranscriptPrinter {
     // MARK: - Box Drawing
     
     func boxedSection(_ title: String, content: String) -> String {
-        let width = 60
+        let width = 70  // Increased width to prevent truncation
         let titleWithDashes = "─ \(title) "
         let dashesNeeded = max(0, width - titleWithDashes.count - 1)
         let topBorder = "┌" + titleWithDashes + String(repeating: "─", count: dashesNeeded) + "┐"
@@ -62,7 +62,10 @@ struct ForensicTranscriptPrinter {
             // Trim trailing newline from line if present
             let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedLine.isEmpty {
-                let paddedLine = "│ " + trimmedLine.padding(toLength: width - 2, withPad: " ", startingAt: 0) + " │"
+                // Preserve ANSI codes when calculating length
+                let displayLength = trimmedLine.replacingOccurrences(of: #"\u{001B}\[[0-9;]*m"#, with: "", options: .regularExpression).count
+                let paddingNeeded = max(0, width - 2 - displayLength)
+                let paddedLine = "│ " + trimmedLine + String(repeating: " ", count: paddingNeeded) + " │"
                 boxedContent += paddedLine + "\n"
             }
         }
@@ -143,7 +146,10 @@ struct ForensicTranscriptPrinter {
         let keyUpper = key.uppercased()
         let paddedKey = keyUpper.padding(toLength: keyWidth, withPad: " ", startingAt: 0)
         let nameFormatted = colorized ? "\(ANSIColor.fieldName)\(paddedKey)\(ANSIColor.reset)" : paddedKey
-        return "\(nameFormatted) \(value)\n"
+        // Truncate value if too long to prevent box overflow (box width is 70, minus key width, minus "│ " and " │")
+        let maxValueLength = 70 - keyWidth - 4
+        let truncatedValue = value.count > maxValueLength ? String(value.prefix(maxValueLength - 3)) + "..." : value
+        return "\(nameFormatted) \(truncatedValue)\n"
     }
     
     // MARK: - Decoded Fields
