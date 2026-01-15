@@ -29,6 +29,8 @@ struct AssertionInspectorView: View {
     @State private var error: String?
     @State private var isDecoding: Bool = false
     
+    @Environment(\.dismiss) private var dismiss
+    
     enum InspectionMode: String, CaseIterable {
         case semantic = "Semantic"
         case forensic = "Forensic"
