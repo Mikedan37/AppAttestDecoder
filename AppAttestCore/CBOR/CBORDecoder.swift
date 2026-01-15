@@ -28,6 +28,13 @@ public enum CBORDecodingError: Error, CustomStringConvertible {
 public final class CBORDecoder {
 
     public static func decode(_ data: Data) throws -> CBORValue {
+        guard !data.isEmpty else {
+            throw CBORDecodingError.truncated(
+                expected: 1,
+                remaining: 0,
+                atOffset: 0
+            )
+        }
         return try CBORDecoder(data).decodeValue()
     }
 
@@ -35,6 +42,12 @@ public final class CBORDecoder {
     private var offset: Int = 0
 
     private init(_ data: Data) {
+        // Defensive check: ensure data is not empty
+        guard !data.isEmpty else {
+            // This should never happen if called correctly, but be defensive
+            self.data = Data()
+            return
+        }
         self.data = data
     }
 
@@ -122,13 +135,23 @@ public final class CBORDecoder {
     // MARK: - Reads
 
     private func readByte() throws -> UInt8 {
-        guard offset < data.count else {
+        // Defensive checks
+        guard !data.isEmpty else {
             throw CBORDecodingError.truncated(
                 expected: 1,
                 remaining: 0,
+                atOffset: 0
+            )
+        }
+        guard offset >= 0 && offset < data.count else {
+            throw CBORDecodingError.truncated(
+                expected: 1,
+                remaining: max(0, data.count - offset),
                 atOffset: offset
             )
         }
+        // Safe access - we've verified bounds above
+        // Access via subscript after bounds check
         let byte = data[offset]
         offset += 1
         return byte

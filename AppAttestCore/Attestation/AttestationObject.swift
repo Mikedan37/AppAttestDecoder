@@ -49,6 +49,9 @@ public struct AttestationObject {
         switch topLevel {
         case .byteString(let data):
             // App Attest defines the top-level object as a single CBOR-encoded byte string
+            guard !data.isEmpty else {
+                throw AttestationError.invalidTopLevelType
+            }
             unwrapped = try CBORDecoder.decode(data)
         default:
             unwrapped = topLevel
