@@ -142,7 +142,9 @@ func readBase64Input(args: [String]) -> String {
         return args[i + 1].trimmingCharacters(in: .whitespacesAndNewlines)
     }
     if let i = args.firstIndex(of: "--file"), args.count > i + 1 {
-        return readFile(args[i + 1])
+        let fileContent = readFile(args[i + 1])
+        // Remove any whitespace/newlines that might have been added
+        return fileContent.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     // STDIN fallback
     let data = FileHandle.standardInput.readDataToEndOfFile()
@@ -263,8 +265,12 @@ func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool,
         FileHandle.standardError.write(data)
     }
     
-    guard let data = Data(base64Encoded: base64) else {
+    // Trim whitespace and newlines from base64
+    let trimmedBase64 = base64.trimmingCharacters(in: .whitespacesAndNewlines)
+    
+    guard let data = Data(base64Encoded: trimmedBase64) else {
         printError("Error: Invalid base64 string")
+        printError("  Base64 length: \(trimmedBase64.count) characters")
         exit(1)
     }
     
@@ -273,6 +279,11 @@ func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool,
         let attestation = try decoder.decodeAttestationObject(data)
         
         if json {
+            // JSON export mode
+            let jsonMode = ForensicMode(showRaw: false, showDecoded: false, showJSON: true, colorized: false)
+            let output = attestation.forensicPrint(mode: jsonMode)
+            print(output)
+        } else {
             // Human-readable forensic output
             let mode: ForensicMode
             if both {
@@ -287,8 +298,20 @@ func forensicPrintAttestation(base64: String, json: Bool, raw: Bool, both: Bool,
             let output = attestation.forensicPrint(mode: forensicMode)
             print(output)
         }
+    } catch let error as CBORDecodingError {
+        printError("Error: CBOR decoding failed")
+        printError("  \(error)")
+        printError("  This usually means the attestation data is truncated or corrupted")
+        printError("  Base64 length: \(trimmedBase64.count) characters")
+        printError("  Decoded data length: \(data.count) bytes")
+        exit(1)
+    } catch let error as AttestationError {
+        printError("Error: Attestation parsing failed")
+        printError("  \(error)")
+        exit(1)
     } catch {
         printError("Error: \(error)")
+        printError("  Type: \(type(of: error))")
         exit(1)
     }
 }
@@ -467,9 +490,8 @@ func handleAnnotateCommand(args: [String], optJSON: Bool) {
     
     // Decode attestation to verify it's valid (but don't fail if decode fails - we still want the sample)
     let decoder = AppAttestDecoder(teamID: teamID)
-    var decodedAttestation: AttestationObject?
     if let data = Data(base64Encoded: attestationBase64) {
-        decodedAttestation = try? decoder.decodeAttestationObject(data)
+        _ = try? decoder.decodeAttestationObject(data) // Verify it's valid, but don't store
     }
     
     // Create AttestationSample
