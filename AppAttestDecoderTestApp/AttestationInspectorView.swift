@@ -36,7 +36,8 @@ struct AttestationInspectorView: View {
     }
     
     var body: some View {
-        NavigationView {
+        // No nested NavigationView - we're already in a NavigationStack from ContentView
+        ScrollView {
             VStack(spacing: 16) {
                 // Base64 Input (read-only)
                 VStack(alignment: .leading, spacing: 6) {
