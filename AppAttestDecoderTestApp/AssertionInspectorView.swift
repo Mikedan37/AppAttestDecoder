@@ -35,6 +35,14 @@ struct AssertionInspectorView: View {
         case losslessTree = "Lossless Tree"
     }
     
+    /// Decode state for assertion inspection
+    /// Partial decode is expected behavior for App Attest assertions (they require server-side context)
+    enum AssertionDecodeState {
+        case full(AssertionObject)
+        case partial(reason: String, cbor: CBORValue, rawData: Data)
+        case invalid(error: Error)
+    }
+    
     var body: some View {
         NavigationView {
             ScrollView {
@@ -172,8 +180,8 @@ struct AssertionInspectorView: View {
     /// 
     /// ERROR HANDLING PHILOSOPHY:
     /// - Fatal errors: Invalid Base64, invalid CBOR structure
-    /// - Non-fatal errors: Valid CBOR but incomplete/context-dependent COSE envelope
-    ///   In non-fatal cases, we still provide partial inspection (raw CBOR, byte-level view)
+    /// - Partial decode: Valid CBOR but COSE_Sign1 requires server-side context (expected for App Attest)
+    ///   Partial decode is NOT an error—it's expected behavior. We extract what we can.
     private func decodeAssertion() {
         error = nil
         output = ""
@@ -195,22 +203,35 @@ struct AssertionInspectorView: View {
                 cborValue = try CBORDecoder.decode(data)
             } catch {
                 // Fatal error: Invalid CBOR structure
-                let errorMessage = "Invalid CBOR structure: \(error.localizedDescription)\n\n\(error)"
                 DispatchQueue.main.async {
-                    self.error = errorMessage
+                    self.error = "Invalid CBOR structure: \(error.localizedDescription)"
                     self.isDecoding = false
                 }
                 return
             }
             
             // Step 2: Try full COSE_Sign1 decoding
+            let decodeState: AssertionDecodeState
             do {
                 // Structural decoding only - no verification
                 let decoder = AppAttestDecoder(teamID: nil)
                 let assertion = try decoder.decodeAssertion(data)
-                
-                let decodedOutput: String
-                
+                decodeState = .full(assertion)
+            } catch let decodeError {
+                // Partial decode: Valid CBOR but COSE_Sign1 incomplete/context-dependent
+                // This is EXPECTED for App Attest assertions—they require server-side context
+                let isCOSEError = decodeError is COSEError || decodeError is AssertionError
+                if isCOSEError {
+                    decodeState = .partial(reason: decodeError.localizedDescription, cbor: cborValue, rawData: data)
+                } else {
+                    decodeState = .invalid(error: decodeError)
+                }
+            }
+            
+            // Step 3: Generate output based on decode state
+            let decodedOutput: String
+            switch decodeState {
+            case .full(let assertion):
                 // Select output mode (all are inspection-only views)
                 switch selectedMode {
                 case .semantic:
@@ -249,45 +270,23 @@ struct AssertionInspectorView: View {
                     self.error = nil
                     self.isDecoding = false
                 }
-            } catch let decodeError {
-                // Non-fatal error: Valid CBOR but incomplete/context-dependent COSE envelope
-                // Provide partial inspection instead of treating as fatal error
-                let isCOSEError = decodeError is COSEError || decodeError is AssertionError
                 
-                if isCOSEError {
-                    // Valid CBOR but COSE structure incomplete or context-dependent
-                    // Still provide inspection: raw CBOR tree, byte-level view
-                    var partialOutput = "⚠️  Partial Decode Available\n"
-                    partialOutput += "========================================\n\n"
-                    partialOutput += "The input is valid CBOR but the COSE_Sign1 envelope is incomplete\n"
-                    partialOutput += "or context-dependent. This is not necessarily an error—assertions\n"
-                    partialOutput += "may require external context to fully decode.\n\n"
-                    partialOutput += "Raw Error: \(decodeError.localizedDescription)\n\n"
-                    partialOutput += "CBOR STRUCTURE\n"
-                    partialOutput += "---------------\n"
-                    partialOutput += dumpCBORValueForDisplay(cborValue, path: "assertionObject", indent: 0)
-                    partialOutput += "\n\nRAW BYTES\n"
-                    partialOutput += "---------\n"
-                    partialOutput += "Length: \(data.count) bytes\n"
-                    partialOutput += "Base64: \(data.base64EncodedString())\n"
-                    partialOutput += "Hex (first 64): \(data.prefix(64).map { String(format: "%02x", $0) }.joined(separator: " "))"
-                    if data.count > 64 {
-                        partialOutput += "..."
-                    }
-                    partialOutput += "\n"
-                    
-                    DispatchQueue.main.async {
-                        self.output = partialOutput
-                        self.error = "COSE envelope incomplete or context-dependent. Partial inspection available below."
-                        self.isDecoding = false
-                    }
-                } else {
-                    // Unexpected error (shouldn't happen after CBOR decode succeeds)
-                    let errorMessage = "Unexpected decode error: \(decodeError.localizedDescription)\n\n\(decodeError)"
-                    DispatchQueue.main.async {
-                        self.error = errorMessage
-                        self.isDecoding = false
-                    }
+            case .partial(let reason, let cbor, let rawData):
+                // Partial decode: Extract what we can from CBOR structure
+                // App Attest assertions are context-dependent by design
+                let partialOutput = generatePartialDecodeOutput(reason: reason, cbor: cbor, rawData: rawData, mode: selectedMode)
+                
+                DispatchQueue.main.async {
+                    self.output = partialOutput
+                    self.error = "Partial Decode Available\n\nApp Attest assertions require server-side context (clientDataHash, publicKey) for full COSE verification. This is expected behavior, not an error."
+                    self.isDecoding = false
+                }
+                
+            case .invalid(let err):
+                // Unexpected error
+                DispatchQueue.main.async {
+                    self.error = "Unexpected decode error: \(err.localizedDescription)"
+                    self.isDecoding = false
                 }
             }
         }
@@ -301,6 +300,132 @@ struct AssertionInspectorView: View {
     
     private func copyBase64() {
         UIPasteboard.general.string = base64Assertion
+    }
+    
+    // MARK: - Partial Decode Support
+    
+    /// Generate output for partial decode state
+    /// Extracts available fields from CBOR even when COSE_Sign1 parsing fails
+    /// App Attest assertions are context-dependent by design—this is expected, not an error
+    private func generatePartialDecodeOutput(reason: String, cbor: CBORValue, rawData: Data, mode: InspectionMode) -> String {
+        var output = ""
+        
+        // Try to extract authenticatorData from CBOR array structure
+        // COSE_Sign1 is: [protected: bstr, unprotected: map, payload: bstr/null, signature: bstr]
+        var authenticatorDataBytes: Data?
+        var signatureBytes: Data?
+        
+        if case .array(let items) = cbor, items.count >= 4 {
+            // Extract payload (index 2) - contains authenticatorData
+            if case .byteString(let payload) = items[2] {
+                authenticatorDataBytes = payload
+            }
+            
+            // Extract signature (index 3)
+            if case .byteString(let sig) = items[3] {
+                signatureBytes = sig
+            }
+        }
+        
+        switch mode {
+        case .semantic:
+            output += "⚠️  Partial Decode (Expected for App Attest Assertions)\n"
+            output += "========================================\n\n"
+            output += "COSE verification requires server-side context:\n"
+            output += "  • clientDataHash (from server challenge)\n"
+            output += "  • publicKey (from attestation certificate)\n\n"
+            output += "Available Fields:\n"
+            output += "-----------------\n"
+            
+            if let authData = authenticatorDataBytes {
+                output += "Authenticator Data: \(authData.count) bytes\n"
+                // Try to parse authenticatorData structure
+                if let authDataParsed = try? AuthenticatorData(rawData: authData) {
+                    output += "  RP ID Hash: \(authDataParsed.rpIdHash.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+                    output += "  Flags: 0x\(String(format: "%02x", authDataParsed.flags.rawValue))\n"
+                    output += "    userPresent: \(authDataParsed.flags.userPresent)\n"
+                    output += "    userVerified: \(authDataParsed.flags.userVerified)\n"
+                    output += "    extensionsIncluded: \(authDataParsed.flags.extensionsIncluded)\n"
+                    output += "  Sign Count: \(authDataParsed.signCount)\n"
+                } else {
+                    output += "  (AuthenticatorData structure parse failed)\n"
+                }
+            } else {
+                output += "Authenticator Data: Not available in payload\n"
+            }
+            
+            if let sig = signatureBytes {
+                output += "Signature: \(sig.count) bytes\n"
+                output += "  Hex (first 32): \(sig.prefix(32).map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+            } else {
+                output += "Signature: Not available\n"
+            }
+            
+        case .forensic:
+            output += "⚠️  Partial Decode (Forensic View)\n"
+            output += "========================================\n\n"
+            output += "COSE Error: \(reason)\n"
+            output += "Note: App Attest assertions are context-dependent by design.\n"
+            output += "Full COSE verification requires server-side context.\n\n"
+            output += "CBOR STRUCTURE\n"
+            output += "---------------\n"
+            output += dumpCBORValueForDisplay(cbor, path: "assertionObject", indent: 0)
+            output += "\n\nEXTRACTED FIELDS\n"
+            output += "----------------\n"
+            
+            if let authData = authenticatorDataBytes {
+                output += "Payload (AuthenticatorData): \(authData.count) bytes\n"
+                output += "  Base64: \(authData.base64EncodedString())\n"
+                output += "  Hex (first 64): \(authData.prefix(64).map { String(format: "%02x", $0) }.joined(separator: " "))"
+                if authData.count > 64 { output += "..." }
+                output += "\n"
+                
+                if let authDataParsed = try? AuthenticatorData(rawData: authData) {
+                    output += "\nParsed AuthenticatorData:\n"
+                    output += dumpAuthenticatorDataForDisplay(authDataParsed, indent: 2)
+                }
+            }
+            
+            if let sig = signatureBytes {
+                output += "\nSignature: \(sig.count) bytes\n"
+                output += "  Base64: \(sig.base64EncodedString())\n"
+                output += "  Hex: \(sig.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+            }
+            
+            output += "\nRAW BYTES\n"
+            output += "---------\n"
+            output += "Total Length: \(rawData.count) bytes\n"
+            output += "Base64: \(rawData.base64EncodedString())\n"
+            
+        case .losslessTree:
+            output += "LOSSLESS TREE DUMP - Assertion Object (Partial)\n"
+            output += "========================================\n\n"
+            output += "COSE Error: \(reason)\n"
+            output += "Note: Partial decode due to context-dependent COSE structure.\n\n"
+            output += "CBOR STRUCTURE\n"
+            output += "---------------\n"
+            output += dumpCBORValueForDisplay(cbor, path: "assertionObject", indent: 0)
+            
+            if let authData = authenticatorDataBytes {
+                output += "\n\nEXTRACTED AUTHENTICATOR DATA\n"
+                output += "----------------------------\n"
+                if let authDataParsed = try? AuthenticatorData(rawData: authData) {
+                    output += dumpAuthenticatorDataForDisplay(authDataParsed, indent: 0)
+                } else {
+                    output += "Raw bytes: \(authData.count) bytes\n"
+                    output += "Hex: \(authData.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+                }
+            }
+            
+            if let sig = signatureBytes {
+                output += "\n\nEXTRACTED SIGNATURE\n"
+                output += "-------------------\n"
+                output += "Length: \(sig.count) bytes\n"
+                output += "Hex: \(sig.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+            }
+        }
+        
+        return output
     }
     
     // MARK: - Lossless Tree Helpers

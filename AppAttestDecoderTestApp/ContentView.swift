@@ -283,14 +283,15 @@ struct ContentView: View {
                 }
 
                 if let assertionBlobB64 {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("Assertion Blob (base64)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
                         TextEditor(text: .constant(assertionBlobB64))
                             .font(.system(.footnote, design: .monospaced))
-                            .frame(height: 220)
+                            .frame(minHeight: 44, maxHeight: 96)
+                            .fixedSize(horizontal: false, vertical: false)
                             .textSelection(.enabled)
                             .scrollDisabled(false)
                             .contextMenu {
