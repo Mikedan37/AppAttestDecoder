@@ -324,6 +324,8 @@ struct ContentView: View {
                 }
             }
             .padding()
+            .navigationTitle("App Attest Test")
+            .navigationBarTitleDisplayMode(.inline)
         }
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(activityItems: ["Test App Attest Extension"])
