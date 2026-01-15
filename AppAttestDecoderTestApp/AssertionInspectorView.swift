@@ -96,12 +96,14 @@ struct AssertionInspectorView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(isDecoding || base64Assertion.isEmpty)
                 
-                // Status Display (error or partial decode notice)
+                // Status Display (warning/info for partial decode, error for fatal)
+                // Appears below button as per visual hierarchy requirements
                 if let error {
                     VStack(alignment: .leading, spacing: 4) {
-                        if error.contains("Partial Decode") || error.contains("server-side context") {
+                        if error.contains("Partial Decode") || error.contains("server-side context") || error.contains("expected behavior") {
                             // Non-fatal: Partial decode available (expected for App Attest)
-                            Label("Partial Decode Available", systemImage: "exclamationmark.triangle")
+                            // Use amber/orange warning styling, not red
+                            Label("Partial Decode Available (Expected for App Attest Assertions)", systemImage: "info.circle")
                                 .font(.caption)
                                 .foregroundColor(.orange)
                             Text(error)
@@ -109,7 +111,7 @@ struct AssertionInspectorView: View {
                                 .foregroundColor(.secondary)
                                 .textSelection(.enabled)
                         } else {
-                            // Fatal error
+                            // Fatal error (invalid Base64, invalid CBOR)
                             Label("Error", systemImage: "xmark.circle")
                                 .font(.caption)
                                 .foregroundColor(.red)
@@ -121,7 +123,7 @@ struct AssertionInspectorView: View {
                     }
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(error.contains("Partial Decode") || error.contains("server-side context") ? Color.orange.opacity(0.1) : Color.red.opacity(0.1))
+                    .background(error.contains("Partial Decode") || error.contains("server-side context") || error.contains("expected behavior") ? Color.orange.opacity(0.1) : Color.red.opacity(0.1))
                     .cornerRadius(8)
                 }
                 
@@ -232,8 +234,21 @@ struct AssertionInspectorView: View {
             } catch let decodeError {
                 // Partial decode: Valid CBOR but COSE_Sign1 incomplete/context-dependent
                 // This is EXPECTED for App Attest assertions—they require server-side context
-                let isCOSEError = decodeError is COSEError || decodeError is AssertionError
-                if isCOSEError {
+                // COSEError.invalidStructure and similar are expected when context is missing
+                let isExpectedPartialDecode: Bool
+                if decodeError is COSEError {
+                    // COSE errors indicate missing context (clientDataHash, publicKey), not malformed data
+                    // This is expected behavior for App Attest assertions
+                    isExpectedPartialDecode = true
+                } else if decodeError is AssertionError {
+                    // AssertionError also indicates structural issues that may be context-dependent
+                    isExpectedPartialDecode = true
+                } else {
+                    // Other errors (CBOR decode failures) are truly fatal
+                    isExpectedPartialDecode = false
+                }
+                
+                if isExpectedPartialDecode {
                     decodeState = .partial(reason: decodeError.localizedDescription, cbor: cborValue, rawData: data)
                 } else {
                     decodeState = .invalid(error: decodeError)
@@ -290,7 +305,10 @@ struct AssertionInspectorView: View {
                 
                 DispatchQueue.main.async {
                     self.output = partialOutput
-                    self.error = "Partial Decode Available\n\nApp Attest assertions require server-side context (clientDataHash, publicKey) for full COSE verification. This is expected behavior, not an error."
+                    // Clear, factual messaging: assertions are context-dependent by design
+                    // Full COSE verification requires server-provided clientDataHash and publicKey
+                    // This partial decode is expected, not an error
+                    self.error = "Assertions are context-dependent by design. Full COSE verification requires server-provided clientDataHash and publicKey. This partial decode is expected."
                     self.isDecoding = false
                 }
                 

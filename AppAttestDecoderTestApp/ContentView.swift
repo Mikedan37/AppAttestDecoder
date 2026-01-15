@@ -300,7 +300,7 @@ struct ContentView: View {
                                 }
                             }
                         
-                        // Inspector Button
+                        // Inspector Button - compact layout, no extra spacing
                         // NOTE: This opens an inspection-only view.
                         // It does NOT perform verification or make trust decisions.
                         NavigationLink {
