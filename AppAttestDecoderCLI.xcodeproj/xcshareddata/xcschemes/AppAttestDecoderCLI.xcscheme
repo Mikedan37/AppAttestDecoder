@@ -57,8 +57,12 @@
             isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "pretty --forensic --full --file /path/to/attestation.txt"
+            argument = "pretty --forensic --full --file /tmp/test_attestation_new.txt"
             isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "pretty --forensic --full --file /path/to/attestation.txt"
+            isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "pretty --forensic --file /tmp/test_attestation_new.txt"
