@@ -280,8 +280,8 @@ struct AssertionInspectorView: View {
                 let preview = data.prefix(32)
                 output += "\(indentStr)  hex (first 32): \(preview.map { String(format: "%02x", $0) }.joined(separator: " "))...\n"
             }
-        case .utf8String(let str):
-            output += "\(indentStr)\(path): utf8String(\"\(str)\")\n"
+        case .textString(let str):
+            output += "\(indentStr)\(path): textString(\"\(str)\")\n"
         case .array(let items):
             output += "\(indentStr)\(path): array(\(items.count) items)\n"
             for (index, item) in items.enumerated() {
@@ -292,7 +292,7 @@ struct AssertionInspectorView: View {
             for (key, value) in map {
                 let keyStr: String
                 switch key {
-                case .utf8String(let str):
+                case .textString(let str):
                     keyStr = str
                 case .unsigned(let u):
                     keyStr = "\(u)"
@@ -309,8 +309,6 @@ struct AssertionInspectorView: View {
             output += dumpCBORValueForDisplay(value, path: "\(path).value", indent: indent + 2)
         case .simple(let simple):
             output += "\(indentStr)\(path): simple(\(simple))\n"
-        case .floatingPoint(let fp):
-            output += "\(indentStr)\(path): floatingPoint(\(fp))\n"
         case .boolean(let b):
             output += "\(indentStr)\(path): boolean(\(b))\n"
         case .null:
