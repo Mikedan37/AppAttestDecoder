@@ -16,12 +16,14 @@ let package = Package(
         ),
     ],
     dependencies: [
-        // No external dependencies - pure Swift implementation
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
     ],
     targets: [
         .target(
             name: "AppAttestCore",
-            dependencies: [],
+            dependencies: [
+                .product(name: "Crypto", package: "swift-crypto"),
+            ],
             path: "AppAttestCore",
             exclude: [
                 "AppAttestCore.docc"  // Documentation catalog excluded from package
@@ -31,6 +33,7 @@ let package = Package(
                 "ASN1",
                 "CBOR",
                 "COSE",
+                "CMS",
                 "Attestation",
                 "X509"
             ]
