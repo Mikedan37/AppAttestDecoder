@@ -255,7 +255,8 @@ struct ContentView: View {
                                     self.assertionError = nil
                                     print("GenerateAssertion success: \(assertionObject.count) bytes")
                                     
-                                    // Capture clientDataHash for assertion verification context
+                                    // Capture clientDataHash for assertion verification context immediately
+                                    // This must happen at generation time - cannot reconstruct later
                                     self.captureAssertionContext(keyID: keyID, clientDataHash: clientDataHash)
                                 } else {
                                     self.assertionError = "Assertion failed with no error (unsupported or misconfigured)."
@@ -312,7 +313,7 @@ struct ContentView: View {
                         // NOTE: This opens an inspection-only view.
                         // It does NOT perform verification or make trust decisions.
                         NavigationLink {
-                            AssertionInspectorView(base64Assertion: assertionBlobB64)
+                            AssertionInspectorView(base64Assertion: assertionBlobB64, keyID: keyID)
                         } label: {
                             HStack {
                                 Image(systemName: "magnifyingglass")
