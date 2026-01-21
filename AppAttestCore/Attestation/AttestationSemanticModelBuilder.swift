@@ -530,46 +530,39 @@ extension AttestationObject {
                 rawData: receiptData
             )
         } catch let error {
-            // CBOR decode failed - show error
+            // CBOR decode failed - try ASN.1
+            var asn1Reader = ASN1Reader(receiptData)
+            if let tlv = try? asn1Reader.readTLV() {
+                let asn1Info = AttestationSemanticModel.ASN1StructureInfo(
+                    tag: describeASN1Tag(tlv.tag),
+                    tagClass: describeASN1Class(tlv.tag),
+                    constructed: tlv.tag.constructed,
+                    length: tlv.length,
+                    description: "ASN.1 \(describeASN1Tag(tlv.tag))"
+                )
+                return AttestationSemanticModel.ReceiptSection(
+                    containerType: "ASN.1 DER",
+                    structure: .asn1(asn1Info),
+                    rawData: receiptData
+                )
+            }
+            
+            // Try Property List
+            if let _ = try? PropertyListSerialization.propertyList(from: receiptData, options: [], format: nil) {
+                return AttestationSemanticModel.ReceiptSection(
+                    containerType: "Property List",
+                    structure: .plist(AttestationSemanticModel.PropertyListInfo(format: "binary", rootType: "unknown")),
+                    rawData: receiptData
+                )
+            }
+            
+            // Opaque
             return AttestationSemanticModel.ReceiptSection(
-                containerType: "CBOR (parse failed)",
-                structure: .opaque(reason: "CBOR decode error: \(error)"),
+                containerType: "Unknown",
+                structure: .opaque(reason: "No recognizable structure (not CMS, CBOR, ASN.1, or plist)"),
                 rawData: receiptData
             )
         }
-        
-        // Try ASN.1
-        var asn1Reader = ASN1Reader(receiptData)
-        if let tlv = try? asn1Reader.readTLV() {
-            let asn1Info = AttestationSemanticModel.ASN1StructureInfo(
-                tag: describeASN1Tag(tlv.tag),
-                tagClass: describeASN1Class(tlv.tag),
-                constructed: tlv.tag.constructed,
-                length: tlv.length,
-                description: "ASN.1 \(describeASN1Tag(tlv.tag))"
-            )
-            return AttestationSemanticModel.ReceiptSection(
-                containerType: "ASN.1 DER",
-                structure: .asn1(asn1Info),
-                rawData: receiptData
-            )
-        }
-        
-        // Try Property List
-        if let _ = try? PropertyListSerialization.propertyList(from: receiptData, options: [], format: nil) {
-            return AttestationSemanticModel.ReceiptSection(
-                containerType: "Property List",
-                structure: .plist(AttestationSemanticModel.PropertyListInfo(format: "binary", rootType: "unknown")),
-                rawData: receiptData
-            )
-        }
-        
-        // Opaque
-        return AttestationSemanticModel.ReceiptSection(
-            containerType: "Unknown",
-            structure: .opaque(reason: "No recognizable structure (not CMS, CBOR, ASN.1, or plist)"),
-            rawData: receiptData
-        )
     }
     
     private func buildCMSSignedDataInfo(cms: CMSSignedData) -> AttestationSemanticModel.CMSSignedDataInfo {
@@ -686,7 +679,7 @@ extension AttestationObject {
         
         if let leafCertDER = attestationStatement.x5c.first,
            let leafCert = try? X509Certificate.parse(der: leafCertDER) {
-            for (oid, ext) in leafCert.decodedExtensions {
+            for (oid, _) in leafCert.decodedExtensions {
                 let rawDER = leafCert.extensions[oid] ?? Data()
                 extensions.append(AttestationSemanticModel.ExtensionRaw(
                     oid: oid,

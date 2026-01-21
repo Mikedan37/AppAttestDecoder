@@ -3,11 +3,11 @@
 ## Current State
 
 **Functionally:** Complete  
-**Maturely:** Production-ready (only polish or productization remains)
+**Maturely:** Feature-complete for inspection workflows (polish or productization may follow)
 
 ## What It Is
 
-A professional-grade security tool for decoding Apple App Attest artifacts. It provides:
+A structural inspection tool for decoding Apple App Attest artifacts. It provides:
 
 - **Lossless inspection** - Every byte visible, nothing hidden
 - **Dual-view output** - Raw bytes + decoded values side-by-side
@@ -186,12 +186,11 @@ Complete documentation available:
 ## Final Assessment
 
 The tool is:
-- Functionally complete
-- Maturely production-ready
+- Functionally complete for inspection workflows
 - Built for fuzziness, not just happy paths
 - Designed for incident response and forensic clarity
 
-**Status:** Ready for use. Optional enhancements are multipliers, not requirements.
+**Status:** Suitable for inspection and analysis workflows. Optional enhancements are multipliers, not requirements.
 
 ---
 

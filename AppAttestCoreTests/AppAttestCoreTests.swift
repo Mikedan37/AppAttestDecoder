@@ -1279,7 +1279,73 @@ final class AppAttestCoreTests: XCTestCase {
         // The prettyPrint method is verified by its existence in AssertionObject+PrettyPrint.swift
         XCTAssertNotNil(assertionType, "AssertionObject type should exist")
     }
-    
+
+    // MARK: - decodeAssertionObject (Apple map format)
+
+    /// Test decodeAssertionObject extracts authenticatorData and signature from CBOR map.
+    /// Uses minimal hand-built CBOR: map{ "authenticatorData": b"\xaa\xbb\xcc", "signature": b"\x11\x22\x33\x44" }.
+    func testDecodeAssertionObjectMapFormat() throws {
+        let decoder = AppAttestDecoder(teamID: teamID)
+        // CBOR: a2 71 "authenticatorData" 43 aa bb cc 68 "signature" 44 11 22 33 44
+        var cbor = Data()
+        cbor.append(0xa2) // map(2)
+        cbor.append(0x71) // text(17)
+        cbor.append(contentsOf: "authenticatorData".utf8)
+        cbor.append(0x43) // byte string(3)
+        cbor.append(contentsOf: [0xaa, 0xbb, 0xcc])
+        cbor.append(0x68) // text(8)
+        cbor.append(contentsOf: "signature".utf8)
+        cbor.append(0x44) // byte string(4)
+        cbor.append(contentsOf: [0x11, 0x22, 0x33, 0x44])
+
+        let (auth, sig) = try decoder.decodeAssertionObject(cbor)
+        XCTAssertEqual(auth, Data([0xaa, 0xbb, 0xcc]))
+        XCTAssertEqual(sig, Data([0x11, 0x22, 0x33, 0x44]))
+    }
+
+    /// Test decodeAssertionObject(base64Encoded:) decodes standard base64 then extracts.
+    func testDecodeAssertionObjectBase64() throws {
+        let decoder = AppAttestDecoder(teamID: teamID)
+        var cbor = Data([0xa2, 0x71])
+        cbor.append(contentsOf: "authenticatorData".utf8)
+        cbor.append(contentsOf: [0x43, 0xaa, 0xbb, 0xcc, 0x68])
+        cbor.append(contentsOf: "signature".utf8)
+        cbor.append(contentsOf: [0x44, 0x11, 0x22, 0x33, 0x44])
+        let b64 = cbor.base64EncodedString()
+
+        let (auth, sig) = try decoder.decodeAssertionObject(base64Encoded: b64)
+        XCTAssertEqual(auth, Data([0xaa, 0xbb, 0xcc]))
+        XCTAssertEqual(sig, Data([0x11, 0x22, 0x33, 0x44]))
+    }
+
+    /// Test decodeAssertionObject throws for non-map (array).
+    func testDecodeAssertionObjectRequiresMap() throws {
+        let decoder = AppAttestDecoder(teamID: teamID)
+        let notMap = Data([0x82, 0x01, 0x02]) // array(2)[1,2]
+
+        do {
+            _ = try decoder.decodeAssertionObject(notMap)
+            XCTFail("decodeAssertionObject should throw for non-map")
+        } catch AssertionError.invalidStructure {
+            // expected
+        } catch {
+            XCTFail("Expected AssertionError.invalidStructure, got \(error)")
+        }
+    }
+
+    /// Test decodeAssertionObject(base64Encoded:) throws for invalid base64.
+    func testDecodeAssertionObjectBase64InvalidInput() throws {
+        let decoder = AppAttestDecoder(teamID: teamID)
+        do {
+            _ = try decoder.decodeAssertionObject(base64Encoded: "!!!not-base64!!!")
+            XCTFail("decodeAssertionObject(base64Encoded:) should throw for invalid base64")
+        } catch AssertionError.invalidInput {
+            // expected
+        } catch {
+            XCTFail("Expected AssertionError.invalidInput, got \(error)")
+        }
+    }
+
     // MARK: - Raw Materials Exposure Tests
     
     /// Verifies that all raw materials needed for validation are exposed and accessible.

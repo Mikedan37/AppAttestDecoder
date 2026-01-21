@@ -20,7 +20,7 @@ The two tests below prove the boundary is closed: valid assertions pass, tampere
 
 **Expected Result:**
 - Backend responds with: `{ "status": "verified" }`
-- UI displays: **✅ Verified**
+- UI displays: **Verified**
 
 **What This Proves:**
 - App Attest key is valid
@@ -49,7 +49,7 @@ The two tests below prove the boundary is closed: valid assertions pass, tampere
 
 **Expected Result:**
 - Backend responds with: `{ "status": "rejected", "reason": "..." }`
-- UI displays: **❌ Rejected: [reason]**
+- UI displays: **Rejected: [reason]**
 
 **What This Proves:**
 - No normalization
@@ -61,8 +61,8 @@ The two tests below prove the boundary is closed: valid assertions pass, tampere
 ## Success Criteria
 
 Both tests must pass:
-- ✅ Test 1: Real assertion → verified
-- ✅ Test 2: Mutated assertion → rejected
+- Test 1: Real assertion → verified
+- Test 2: Mutated assertion → rejected
 
 When both happen, the system is **cryptographically closed**.
 
@@ -87,3 +87,23 @@ If your backend didn't behave that way, that would be a red flag.
 - It does NOT make trust decisions
 
 This is by design. The trust boundary is enforced by architecture, not by convention.
+
+## Common Failures
+
+**If verification fails with "signature did not verify under supplied public key":**
+
+Three common causes:
+
+1. **iOS sandbox blocking network:** Local network permission not granted, or ATS blocking HTTP. Registration fails silently, making verification appear to fail cryptographically.
+
+   **See:** `docs/IOS_SANDBOX_SETUP.md` for configuration and verification steps.
+
+2. **Key continuity failure:** The assertion was signed by a different Secure Enclave key than the one used for attestation. The keyID may appear identical (same base64 string), but SwiftUI state lifecycle can cause key regeneration.
+
+   **See:** `docs/KEY_CONTINUITY_FAILURE.md` for detailed explanation and fix.
+
+3. **Multiple assertion generation:** Two different assertions were generated in one flow—one for inspection/UI, another sent to backend. Each `generateAssertion` call produces a new signature, so only the exact bytes sent matter.
+
+   **See:** `docs/ASSERTION_SINGLE_SHOT.md` for detection and resolution.
+
+**Diagnostic order:** Check network/sandbox first, then key continuity, then assertion generation.

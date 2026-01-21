@@ -22,6 +22,7 @@ import Darwin.C
 import ucrt
 #endif
 import AppAttestCore
+import CryptoKit
 
 // MARK: - Exit Codes
 
@@ -170,6 +171,9 @@ case "analyze":
 
 case "diff":
     handleDiffCommand(args: args, optJSON: optJSON, colorized: !optNoColor && isTTY())
+
+case "validate":
+    handleValidateCommand(args: args)
 
 default:
     print("Unknown mode: \(mode)\n")
@@ -626,6 +630,170 @@ func decodeAssertion(_ data: Data, hex: Bool, raw: Bool, json: Bool) {
     }
 }
 
+// MARK: - Validation
+
+func handleValidateCommand(args: [String]) {
+    func printError(_ message: String) {
+        let data = (message + "\n").data(using: .utf8)!
+        FileHandle.standardError.write(data)
+    }
+    
+    // Required: --sig-structure (CBOR file or base64)
+    guard let sigStructureIndex = args.firstIndex(of: "--sig-structure"), args.count > sigStructureIndex + 1 else {
+        printError("Error: validate command requires --sig-structure <file|base64>")
+        printError("  This should be the CBOR-encoded Sig_structure bytes")
+        exit(ExitCode.malformedInput.rawValue)
+    }
+    let sigStructureInput = args[sigStructureIndex + 1]
+    
+    // Required: --signature (DER file or base64)
+    guard let signatureIndex = args.firstIndex(of: "--signature"), args.count > signatureIndex + 1 else {
+        printError("Error: validate command requires --signature <file|base64>")
+        printError("  This should be the ASN.1 DER ECDSA signature")
+        exit(ExitCode.malformedInput.rawValue)
+    }
+    let signatureInput = args[signatureIndex + 1]
+    
+    // Required: --public-key (base64)
+    guard let publicKeyIndex = args.firstIndex(of: "--public-key"), args.count > publicKeyIndex + 1 else {
+        printError("Error: validate command requires --public-key <base64>")
+        printError("  This should be the raw public key bytes (Base64)")
+        exit(ExitCode.malformedInput.rawValue)
+    }
+    let publicKeyB64 = args[publicKeyIndex + 1]
+    
+    // Read sig_structure (file or base64)
+    let sigStructureData: Data
+    if FileManager.default.fileExists(atPath: sigStructureInput) {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: sigStructureInput)) else {
+            printError("Error: Failed to read sig-structure file: \(sigStructureInput)")
+            exit(ExitCode.malformedInput.rawValue)
+        }
+        sigStructureData = data
+    } else {
+        guard let data = Data(base64Encoded: sigStructureInput) else {
+            printError("Error: Invalid base64 sig-structure")
+            exit(ExitCode.malformedInput.rawValue)
+        }
+        sigStructureData = data
+    }
+    
+    // Read signature (file or base64)
+    let signatureData: Data
+    if FileManager.default.fileExists(atPath: signatureInput) {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: signatureInput)) else {
+            printError("Error: Failed to read signature file: \(signatureInput)")
+            exit(ExitCode.malformedInput.rawValue)
+        }
+        signatureData = data
+    } else {
+        guard let data = Data(base64Encoded: signatureInput) else {
+            printError("Error: Invalid base64 signature")
+            exit(ExitCode.malformedInput.rawValue)
+        }
+        signatureData = data
+    }
+    
+    // Read public key
+    guard let publicKeyData = Data(base64Encoded: publicKeyB64) else {
+        printError("Error: Invalid base64 public key")
+        exit(ExitCode.malformedInput.rawValue)
+    }
+    
+    // Hash sig_structure
+    let sigStructureHash = SHA256.hash(data: sigStructureData)
+    
+    // Create P256 public key
+    guard let publicKey = try? P256.Signing.PublicKey(x963Representation: publicKeyData) else {
+        printError("❌ Verification failed: invalid public key format")
+        printError("  Expected: 65-byte uncompressed P-256 public key (0x04 || x || y)")
+        printError("  Received: \(publicKeyData.count) bytes")
+        exit(ExitCode.malformedInput.rawValue)
+    }
+    
+    // Parse ASN.1 DER signature
+    guard let (r, s) = parseASN1DERSignature(signatureData) else {
+        printError("❌ Verification failed: invalid ASN.1 DER signature format")
+        exit(ExitCode.malformedInput.rawValue)
+    }
+    
+    // Create ECDSA signature
+    guard let ecdsaSignature = try? P256.Signing.ECDSASignature(rawRepresentation: r + s) else {
+        printError("❌ Verification failed: invalid ECDSA signature")
+        exit(ExitCode.malformedInput.rawValue)
+    }
+    
+    // Verify
+    let isValid = publicKey.isValidSignature(ecdsaSignature, for: Data(sigStructureHash))
+    
+    if isValid {
+        print("✅ Signature verified (ECDSA P-256 over SHA256)")
+        print("  Sig_structure hash: \(Data(sigStructureHash).map { String(format: "%02x", $0) }.joined(separator: ""))")
+        exit(ExitCode.success.rawValue)
+    } else {
+        printError("❌ Verification failed: invalid signature")
+        printError("  Sig_structure hash: \(Data(sigStructureHash).map { String(format: "%02x", $0) }.joined(separator: ""))")
+        printError("  Possible causes:")
+        printError("    - Wrong public key")
+        printError("    - Mutated Sig_structure")
+        printError("    - Signature from different artifact")
+        exit(ExitCode.internalError.rawValue)
+    }
+}
+
+/// Parse ASN.1 DER ECDSA signature into (r, s) components
+func parseASN1DERSignature(_ der: Data) -> (r: Data, s: Data)? {
+    // ASN.1 DER structure: SEQUENCE { INTEGER r, INTEGER s }
+    guard der.count >= 8 else { return nil }
+    guard der[0] == 0x30 else { return nil } // SEQUENCE tag
+    
+    var cursor = 1
+    guard cursor < der.count else { return nil }
+    
+    // Read length
+    let length = der[cursor]
+    cursor += 1
+    guard cursor + Int(length) <= der.count else { return nil }
+    
+    // Read INTEGER r
+    guard cursor < der.count, der[cursor] == 0x02 else { return nil } // INTEGER tag
+    cursor += 1
+    guard cursor < der.count else { return nil }
+    
+    let rLength = Int(der[cursor])
+    cursor += 1
+    guard cursor + rLength <= der.count else { return nil }
+    
+    // Skip leading zero if present (DER encoding)
+    var rStart = cursor
+    if rLength > 32 && der[rStart] == 0x00 {
+        rStart += 1
+    }
+    let r = Data(der[rStart..<cursor + rLength])
+    cursor += rLength
+    
+    // Read INTEGER s
+    guard cursor < der.count, der[cursor] == 0x02 else { return nil } // INTEGER tag
+    cursor += 1
+    guard cursor < der.count else { return nil }
+    
+    let sLength = Int(der[cursor])
+    cursor += 1
+    guard cursor + sLength <= der.count else { return nil }
+    
+    // Skip leading zero if present (DER encoding)
+    var sStart = cursor
+    if sLength > 32 && der[sStart] == 0x00 {
+        sStart += 1
+    }
+    let s = Data(der[sStart..<cursor + sLength])
+    
+    // Ensure both are exactly 32 bytes
+    guard r.count == 32 && s.count == 32 else { return nil }
+    
+    return (r, s)
+}
+
 // MARK: - Usage
 
 func handleAnnotateCommand(args: [String], optJSON: Bool) {
@@ -950,6 +1118,7 @@ func printUsage() {
       appattest-decode pretty [--base64 <b64> | --file <path>] [options]
       appattest-decode annotate --context <ctx> --bundle-id <id> --team-id <id> --key-id <b64> [--attestation-base64 <b64> | --file <path>]
       appattest-decode analyze --file <samples.json> [options]
+      appattest-decode validate --sig-structure <file|base64> --signature <file|base64> --public-key <base64>
       appattest-decode selftest
 
     Commands:
@@ -958,6 +1127,7 @@ func printUsage() {
       pretty    Pretty-print attestation object with hierarchical formatting
       annotate  Decode and annotate attestation with execution context (research mode)
       analyze   Compare multiple attestation samples across execution contexts (research mode)
+      validate  Verify ECDSA signature over Sig_structure (opt-in validation)
       selftest  Run self-test to verify CLI functionality
 
     Optional flags:
@@ -971,6 +1141,11 @@ func printUsage() {
       --no-color          Disable colorized output (pretty command only)
       --context <ctx>     Execution context (main|action|ui|sso|other) - for research annotation
       --bundle-id <id>    Bundle identifier - for research annotation
+      
+    Validate command flags:
+      --sig-structure <file|base64>  CBOR-encoded Sig_structure bytes
+      --signature <file|base64>      ASN.1 DER ECDSA signature
+      --public-key <base64>          Raw P-256 public key (65 bytes, Base64)
 
     Input:
       - If no flag is provided, base64 is read from STDIN.

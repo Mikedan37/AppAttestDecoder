@@ -131,10 +131,10 @@ The inspector has been implemented in:
 - `AppAttestDecoderTestApp/AttestationInspectorView.swift`
 
 It follows all constraints:
-- ✅ Inspection only (no verification)
-- ✅ No trust indicators
-- ✅ Graceful error handling
-- ✅ Security boundary comments
-- ✅ Plain, utilitarian UI
+- Inspection only (no verification)
+- No trust indicators
+- Graceful error handling
+- Security boundary comments
+- Plain, utilitarian UI
 
 See `docs/IOS_INSPECTOR_SETUP.md` for setup instructions.
