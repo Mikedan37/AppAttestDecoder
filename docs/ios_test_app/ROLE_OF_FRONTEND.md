@@ -2,86 +2,76 @@
 
 **Scope:** iOS Test App (`AppAttestDecoderTestApp`)
 
-This document describes what the frontend does and what it never does.
+This document describes what the frontend displays, forwards, and records.
 
 ---
 
-## What the Frontend Does
+## What the Frontend Displays
 
-The frontend is a **diagnostic tool** that:
+The frontend is a diagnostic instrument that:
 
-1. **Generates artifacts** via the App Attest API
-   - Creates keys using `DCAppAttestService.generateKey()`
-   - Creates attestations using `DCAppAttestService.attestKey()`
-   - Creates assertions using `DCAppAttestService.generateAssertion()`
+1. **Displays artifact generation**
+   - Shows keyID returned by `DCAppAttestService.generateKey()`
+   - Shows attestationObject bytes returned by `DCAppAttestService.attestKey()`
+   - Shows assertionObject bytes returned by `DCAppAttestService.generateAssertion()`
 
-2. **Transports data** to the backend unchanged
+2. **Forwards data unchanged**
    - Sends raw bytes exactly as provided by the App Attest API
    - No modification, no interpretation, no transformation
    - Handles network errors (connection failures, timeouts, HTTP errors)
 
-3. **Logs evidence** for debugging
+3. **Records evidence for debugging**
    - Decodes artifacts for logging only (CBOR, ASN.1 parsing)
    - Extracts raw bytes for forensic logging
    - Computes hashes for log correlation
    - Stores evidence temporarily for UI display
 
 4. **Displays backend responses**
-   - Shows backend HTTP responses without interpretation
+   - Shows backend HTTP responses verbatim
    - Does not infer meaning from response status
-   - Does not make security assessments
+   - Attributes status to backend ("Backend response (status: verified)")
 
 ---
 
 ## What the Frontend Never Does
 
-The frontend **never**:
-
-1. **Verifies cryptographic signatures**
-   - Does not call `CryptoKit.isValidSignature`
-   - Does not validate certificate chains
-   - Does not check certificate expiration or revocation
-   - Does not verify RP ID hashes or nonces
-
-2. **Makes security decisions**
-   - Does not infer that assertions "will verify" or "will not verify"
-   - Does not block assertion generation based on security assumptions
-   - Does not make trust decisions about artifacts
-   - Does not reject artifacts based on cryptographic interpretation
-
-3. **Interprets validity**
-   - Does not claim artifacts are "valid" or "invalid"
-   - Does not infer verification success/failure beyond HTTP status codes
-   - Does not interpret certificate chain validity
-   - Does not interpret signature validity
-   - Does not make policy decisions (bundle ID matching, environment checks)
-
-4. **Assumes trust**
-   - Does not assume backend acceptance means cryptographic validity
-   - Does not cache trust state ("this key is trusted")
-   - Does not reuse assertions across different challenges
-   - Does not assume continuity implies security
+The frontend never:
+- Verifies cryptographic signatures
+- Validates certificate chains
+- Checks certificate expiration or revocation
+- Makes trust decisions
+- Enforces policies
+- Blocks operations based on backend status
+- Interprets validity
+- Assumes trust
 
 ---
 
-## Security Boundary
+## Frontend Authority Boundaries
 
-The frontend operates on the **client side** of a security boundary. The backend operates on the **server side** where all cryptographic verification happens.
+The frontend performs no cryptographic verification, makes no security decisions, treats responses as non-authoritative, and does not block operations based on backend status.
 
-**Frontend responsibility:** Generate and transport artifacts correctly.
+**No cryptographic verification:**
+- No signature verification
+- No certificate chain validation
+- No certificate expiration checks
+- No nonce verification
 
-**Backend responsibility:** Verify cryptographic signatures, validate certificate chains, enforce policies, prevent replay attacks.
+**No security decisions:**
+- No trust decisions
+- No authorization decisions
+- No policy enforcement
+- No validity interpretation
 
-## Diagnostic Tool Characteristics
+**Non-authoritative responses:**
+- Backend responses are displayed verbatim
+- Status values are literal strings, not interpreted
+- No meaning is inferred from response codes
 
-This is a **diagnostic test app** that:
-- Provides verbose and forensic output for debugging
-- Shows what data is generated
-- Shows what data is sent
-- Shows backend responses
-- Does not make security decisions
-
-All security decisions happen on the backend.
+**No blocking:**
+- Operations are not blocked based on backend status
+- Buttons remain enabled regardless of response
+- State is preserved regardless of response
 
 ---
 

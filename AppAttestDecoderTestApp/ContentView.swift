@@ -1203,7 +1203,7 @@ struct ContentView: View {
     #endif
     
     /// Log assertion fingerprints for backend comparison. Backend performs all verification.
-    /// IMPORTANT (correctness): clientDataHash is backend-provided - frontend NEVER computes it.
+    /// IMPORTANT (correctness): clientDataHash is computed from canonical clientDataBytes - frontend builds clientData and computes SHA256.
     func logVerificationFingerprints(keyID: String, assertionObject: Data, clientDataHash: Data, verifyRunID: String) {
         // State check: clientDataHash expected to be 32 bytes (backend-provided)
         guard clientDataHash.count == 32 else {

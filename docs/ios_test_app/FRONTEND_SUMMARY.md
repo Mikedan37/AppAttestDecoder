@@ -1,76 +1,68 @@
-# Frontend Responsibilities Summary
+# Frontend Operations Summary
 
 **Scope:** iOS Test App (`AppAttestDecoderTestApp`)
 
-This document provides a concise summary of what the frontend is responsible for and what it is not responsible for.
+This document summarizes what the frontend displays, forwards, and records.
 
 ---
 
-## Frontend Responsibilities
+## Frontend Operations
 
-### 1. Generate Artifacts
+### 1. Artifact Generation
 
-- **Generates keys** via `DCAppAttestService.generateKey()`
-- **Generates attestations** via `DCAppAttestService.attestKey()`
-- **Generates assertions** via `DCAppAttestService.generateAssertion()`
-- **Records timestamps** for each operation
+- Displays keyID returned by `DCAppAttestService.generateKey()`
+- Displays attestationObject bytes returned by `DCAppAttestService.attestKey()`
+- Displays assertionObject bytes returned by `DCAppAttestService.generateAssertion()`
+- Records timestamps for each operation
 
-### 2. Transport Data
+### 2. Data Transport
 
-- **Sends exact bytes** to backend unchanged
-- **No modification** of artifact bytes
-- **No interpretation** of data meaning
-- **Handles network errors** (connection failures, timeouts, HTTP errors)
+- Forwards exact bytes to backend unchanged
+- No modification of artifact bytes
+- No interpretation of data meaning
+- Handles network errors (connection failures, timeouts, HTTP errors)
 
-### 3. Display Backend Responses
+### 3. Backend Response Display
 
-- **Shows backend responses verbatim** (no modification)
-- **Attributes status to backend** ("Backend response (status: ...)")
-- **Records flow trace** with timestamps and flowID
-- **Does not interpret** response meaning
+- Shows backend responses verbatim (no modification)
+- Attributes status to backend ("Backend response (status: ...)")
+- Records flow trace with timestamps and flowID
+- Does not interpret response meaning
 
-### 4. Maintain State (UI Consistency Only)
+### 4. State Management
 
-- **Tracks flowID** from registration response
-- **Tracks keyID** for UI state
-- **Tracks verifyRunID** for log correlation
-- **State checks ensure UI consistency**, not security
+- Tracks flowID from registration response
+- Tracks keyID for UI state
+- Tracks verifyRunID for log correlation
+- State checks maintain UI consistency
 
 ---
 
-## Frontend Non-Responsibilities
+## Frontend Authority Boundaries
 
-### 1. Verification
+The frontend performs no cryptographic verification, makes no security decisions, treats responses as non-authoritative, and does not block operations based on backend status.
 
-- **Does NOT verify** cryptographic signatures
-- **Does NOT validate** certificate chains
-- **Does NOT check** certificate expiration or revocation
-- **Does NOT verify** RP ID hashes or nonces
-- **Backend performs all verification**
+**No cryptographic verification:**
+- No signature verification
+- No certificate chain validation
+- No certificate expiration checks
+- No nonce verification
 
-### 2. Security Decisions
+**No security decisions:**
+- No trust decisions
+- No authorization decisions
+- No policy enforcement
+- No validity interpretation
 
-- **Does NOT decide** whether artifacts are valid
-- **Does NOT decide** whether keys should be trusted
-- **Does NOT decide** whether assertions should be accepted
-- **Does NOT decide** whether users should be authorized
-- **Backend makes all security decisions**
+**Non-authoritative responses:**
+- Backend responses are displayed verbatim
+- Status values are literal strings, not interpreted
+- No meaning is inferred from response codes
 
-### 3. Policy Enforcement
-
-- **Does NOT enforce** bundle ID matching
-- **Does NOT enforce** environment checks
-- **Does NOT enforce** replay protection
-- **Does NOT enforce** freshness requirements
-- **Backend enforces all policy**
-
-### 4. Blocking or Allowing
-
-- **Does NOT block** operations based on backend responses
-- **Does NOT disable** buttons based on backend rejection status
-- **Does NOT prevent** generating new assertions
-- **Does NOT clear** state based on verification status
-- **Backend controls access**
+**No blocking:**
+- Operations are not blocked based on backend status
+- Buttons remain enabled regardless of response
+- State is preserved regardless of response
 
 ---
 
@@ -80,27 +72,22 @@ Throughout the codebase, these phrases are used consistently:
 
 ### Backend Attribution
 
-- "Backend performs verification"
 - "Backend response (status: ...)"
 - "Backend returned status: ..."
-- "Backend performs all cryptographic verification"
-- "Backend enforces policy"
 
 ### Frontend Actions
 
-- "Frontend generates artifacts"
-- "Frontend sends data to backend"
-- "Frontend displays backend responses"
-- "Frontend records flow trace"
-- "Frontend maintains state (UI consistency only)"
+- "Frontend displays..."
+- "Frontend forwards..."
+- "Frontend records..."
 
 ### Non-Actions
 
-- "Frontend does NOT verify"
-- "Frontend does NOT decide"
-- "Frontend does NOT enforce"
-- "Frontend does NOT block"
-- "Frontend does NOT interpret"
+- "Frontend does not verify"
+- "Frontend does not decide"
+- "Frontend does not enforce"
+- "Frontend does not block"
+- "Frontend does not interpret"
 
 ---
 
@@ -108,7 +95,7 @@ Throughout the codebase, these phrases are used consistently:
 
 1. **Observational Only:** Frontend observes and records, does not decide
 2. **Backend Authority:** All verification and security decisions are backend's responsibility
-3. **State for UI:** State checks ensure UI consistency, not security
+3. **State for UI:** State checks maintain UI consistency
 4. **Verbatim Display:** Backend responses shown exactly as received
 5. **No Blocking:** Frontend never blocks operations based on backend status
 
@@ -117,9 +104,9 @@ Throughout the codebase, these phrases are used consistently:
 ## Examples
 
 See `GUIDE.md` Chapter 5 for concrete examples showing:
-- Successful flow with complete data trace
-- Backend rejection with no frontend blocking
-- Repeated submission with no frontend replay protection
+- Complete flow with data trace
+- Backend rejection display
+- Repeated submission display
 
 ---
 

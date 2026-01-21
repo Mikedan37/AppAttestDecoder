@@ -49,37 +49,37 @@ This document describes what the test app can observe and what it cannot prove.
 
 ### Cryptographic Validity
 
-- **Cannot prove:** Signatures are valid
-- **Cannot prove:** Certificate chains are valid
-- **Cannot prove:** Nonces are correct
-- **Cannot prove:** Public keys match private keys
+- Cannot prove signatures are valid
+- Cannot prove certificate chains are valid
+- Cannot prove nonces are correct
+- Cannot prove public keys match private keys
 
 **Reason:** Frontend does not perform cryptographic verification. All verification happens on the backend.
 
 ### Security Properties
 
-- **Cannot prove:** Artifacts are authentic
-- **Cannot prove:** Keys are secure
-- **Cannot prove:** Replay attacks are prevented
-- **Cannot prove:** Policy is enforced
+- Cannot prove artifacts are authentic
+- Cannot prove keys are secure
+- Cannot prove replay attacks are prevented
+- Cannot prove policy is enforced
 
 **Reason:** Security properties are enforced by the backend, not the frontend.
 
 ### Trust Decisions
 
-- **Cannot prove:** A key should be trusted
-- **Cannot prove:** An assertion should be accepted
-- **Cannot prove:** A user should be authorized
-- **Cannot prove:** An operation should be allowed
+- Cannot prove a key should be trusted
+- Cannot prove an assertion should be accepted
+- Cannot prove a user should be authorized
+- Cannot prove an operation should be allowed
 
 **Reason:** Trust decisions are made by the backend based on policy, not by the frontend.
 
 ### Correctness Guarantees
 
-- **Cannot prove:** Implementation is correct
-- **Cannot prove:** Protocol is followed correctly
-- **Cannot prove:** No bugs exist
-- **Cannot prove:** Production readiness
+- Cannot prove implementation is correct
+- Cannot prove protocol is followed correctly
+- Cannot prove no bugs exist
+- Cannot prove production readiness
 
 **Reason:** This is a diagnostic test app, not a production client. It is for observation and learning only.
 
@@ -89,18 +89,18 @@ This document describes what the test app can observe and what it cannot prove.
 
 ### This App Measures
 
-- **What data is generated:** Artifact bytes, hashes, structure
-- **What data is sent:** Request payloads, encoding
-- **What data is received:** Response payloads, status codes
-- **When operations occur:** Timestamps, flow sequence
-- **How state changes:** flowID, challenge_id, verifyRunID transitions
+- What data is generated (artifact bytes, hashes, structure)
+- What data is sent (request payloads, encoding)
+- What data is received (response payloads, status codes)
+- When operations occur (timestamps, flow sequence)
+- How state changes (flowID, challenge_id, verifyRunID transitions)
 
 ### This App Does Not Measure
 
-- **Whether data is valid:** Cryptographic validity is backend's responsibility
-- **Whether operations are secure:** Security is backend's responsibility
-- **Whether decisions are correct:** Decision correctness is backend's responsibility
-- **Whether policy is enforced:** Policy enforcement is backend's responsibility
+- Whether data is valid (backend's responsibility)
+- Whether operations are secure (backend's responsibility)
+- Whether decisions are correct (backend's responsibility)
+- Whether policy is enforced (backend's responsibility)
 
 ---
 
@@ -108,17 +108,17 @@ This document describes what the test app can observe and what it cannot prove.
 
 ### Appropriate Uses
 
-- **Learning:** Understanding App Attest data flow
-- **Debugging:** Identifying byte-level mismatches
-- **Development:** Testing backend integration
-- **Forensics:** Analyzing artifact structure
+- Learning: Understanding App Attest data flow
+- Debugging: Identifying byte-level mismatches
+- Development: Testing backend integration
+- Forensics: Analyzing artifact structure
 
 ### Inappropriate Uses
 
-- **Security decisions:** Do not use to make trust decisions
-- **Production validation:** Do not use to validate production systems
-- **Authorization:** Do not use to authorize users or operations
-- **Compliance:** Do not use to prove compliance or security
+- Security decisions: Do not use to make trust decisions
+- Production validation: Do not use to validate production systems
+- Authorization: Do not use to authorize users or operations
+- Compliance: Do not use to prove compliance or security
 
 ---
 

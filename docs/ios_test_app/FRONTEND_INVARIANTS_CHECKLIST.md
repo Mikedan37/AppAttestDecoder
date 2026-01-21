@@ -1,16 +1,14 @@
 # Frontend App Attest Invariants Checklist
 
-**Version:** 1.0  
-**Last Updated:** 2026-01-20  
 **Scope:** iOS Test App (`AppAttestDecoderTestApp`)
 
 > **Reference:** This checklist ensures compliance with `FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md` (authoritative).
 
-This checklist ensures the frontend complies with the Frontend App Attest Responsibility Contract.
+This checklist verifies the frontend complies with the Frontend App Attest Responsibility Contract.
 
 ---
 
-##  Transport Invariants
+## Transport Invariants
 
 - [x] Attestation/assertion bytes are never modified after generation
 - [x] Base64 encoding happens only at network boundary
@@ -20,7 +18,7 @@ This checklist ensures the frontend complies with the Frontend App Attest Respon
 
 ---
 
-##  State Invariants
+## State Invariants
 
 - [x] `flowID` comes only from REGISTER response
 - [x] `challenge_id` comes only from challenge response
@@ -30,7 +28,7 @@ This checklist ensures the frontend complies with the Frontend App Attest Respon
 
 ---
 
-##  Evidence Invariants
+## Evidence Invariants
 
 - [x] Decoding is observational only (for logging)
 - [x] Evidence is never used for security decisions
@@ -40,7 +38,7 @@ This checklist ensures the frontend complies with the Frontend App Attest Respon
 
 ---
 
-##  Request Construction Invariants
+## Request Construction Invariants
 
 - [x] `clientDataBytes` is built once with sorted keys
 - [x] `clientDataHash` is computed once from `clientDataBytes`
@@ -50,7 +48,7 @@ This checklist ensures the frontend complies with the Frontend App Attest Respon
 
 ---
 
-##  Response Handling Invariants
+## Response Handling Invariants
 
 - [x] Backend responses are displayed without interpretation
 - [x] HTTP status codes are handled, not inferred
@@ -60,7 +58,7 @@ This checklist ensures the frontend complies with the Frontend App Attest Respon
 
 ---
 
-##  Security Boundary Invariants
+## Security Boundary Invariants
 
 - [x] No local signature verification (`CryptoKit.isValidSignature` removed)
 - [x] No certificate chain validation
@@ -71,7 +69,7 @@ This checklist ensures the frontend complies with the Frontend App Attest Respon
 
 ---
 
-##  Message Language Invariants
+## Message Language Invariants
 
 - [x] No messages claim assertions "will not verify"
 - [x] No warnings infer cryptographic validity
@@ -81,10 +79,14 @@ This checklist ensures the frontend complies with the Frontend App Attest Respon
 
 ---
 
-## Verification Status
+## Summary
 
-**Last Verified:** 2026-01-20  
-**Status:**  All invariants satisfied  
-**Violations Fixed:** 3 (security inference messages)
+The frontend treats App Attest artifacts as opaque byte blobs and makes no security decisions. All invariants are satisfied.
 
-All code changes have been applied. The frontend now correctly treats App Attest artifacts as opaque byte blobs and makes no security decisions.
+---
+
+## Related Documentation
+
+- **`FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md`** - Authoritative contract
+- **`FRONTEND_NON_AUTHORITY_TEST.md`** - Test checklist
+- **`GUIDE.md`** - Complete guide

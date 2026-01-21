@@ -1,8 +1,5 @@
 # Frontend App Attest Responsibility Contract
 
-**Version:** 1.0  
-**Last Updated:** 2026-01-20  
-**Status:** Mandatory  
 **Scope:** iOS Test App (`AppAttestDecoderTestApp`)
 
 > **This document applies to the diagnostic test app only.**  
@@ -10,7 +7,7 @@
 
 ## Purpose
 
-This document defines the **non-negotiable** responsibilities and boundaries for the iOS test app frontend in an App Attest implementation. The frontend is a **transport and evidence generator only**—it does not make security decisions, interpret validity, or assume trust.
+This document defines the responsibilities and boundaries for the iOS test app frontend in an App Attest implementation. The frontend is a transport and evidence generator—it displays data, forwards data unchanged, and records backend responses. It does not make security decisions, interpret validity, or assume trust.
 
 **This is the authoritative contract.** Other documents reference this; nothing overrides it.
 
@@ -26,7 +23,7 @@ The frontend **never** interprets cryptographic validity, makes trust decisions,
 
 ---
 
-## What the Frontend IS Allowed To Do
+## What the Frontend Does
 
 ### Transport Operations
 - Generate keys via `DCAppAttestService.generateKey()`
@@ -64,40 +61,40 @@ The frontend **never** interprets cryptographic validity, makes trust decisions,
 
 ---
 
-## What the Frontend MUST Never Do
+## What the Frontend Never Does
 
-###  Security Decisions
-- **Never** infer that an assertion "will not verify" or "will verify"
-- **Never** block assertion generation based on security assumptions
-- **Never** make trust decisions about artifacts
-- **Never** reject artifacts based on cryptographic interpretation
-- **Never** assume validity based on decoded structure
+### Security Decisions
+- Does not infer that an assertion "will not verify" or "will verify"
+- Does not block assertion generation based on security assumptions
+- Does not make trust decisions about artifacts
+- Does not reject artifacts based on cryptographic interpretation
+- Does not assume validity based on decoded structure
 
-###  Validity Interpretation
-- **Never** claim artifacts are "valid" or "invalid"
-- **Never** infer verification success/failure beyond HTTP status codes
-- **Never** interpret certificate chain validity
-- **Never** interpret signature validity
-- **Never** make policy decisions (bundle ID matching, environment checks)
+### Validity Interpretation
+- Does not claim artifacts are "valid" or "invalid"
+- Does not infer verification success/failure beyond HTTP status codes
+- Does not interpret certificate chain validity
+- Does not interpret signature validity
+- Does not make policy decisions (bundle ID matching, environment checks)
 
-###  Trust Assumptions
-- **Never** assume backend acceptance means cryptographic validity
-- **Never** cache trust state ("this key is trusted")
-- **Never** reuse assertions across different challenges
-- **Never** assume continuity implies security
+### Trust Assumptions
+- Does not assume backend acceptance means cryptographic validity
+- Does not cache trust state ("this key is trusted")
+- Does not reuse assertions across different challenges
+- Does not assume continuity implies security
 
-###  Cryptographic Verification
-- **Never** verify ECDSA signatures locally (`CryptoKit.isValidSignature`)
-- **Never** validate certificate chains
-- **Never** check certificate expiration or revocation
-- **Never** verify RP ID hashes or nonces
-- **Never** perform any cryptographic validation
+### Cryptographic Verification
+- Does not verify ECDSA signatures locally (`CryptoKit.isValidSignature`)
+- Does not validate certificate chains
+- Does not check certificate expiration or revocation
+- Does not verify RP ID hashes or nonces
+- Does not perform any cryptographic validation
 
-###  Assertion Reuse
-- **Never** reuse assertions for different challenges
-- **Never** cache assertions for "efficiency"
-- **Never** regenerate assertions from stored state
-- **Never** send the same assertion twice (except retries of the same request)
+### Assertion Reuse
+- Does not reuse assertions for different challenges
+- Does not cache assertions for "efficiency"
+- Does not regenerate assertions from stored state
+- Does not send the same assertion twice (except retries of the same request)
 
 ---
 
@@ -270,130 +267,19 @@ GET /app-attest/challenge?flowID=<uuid>&keyID=<base64>
 
 ---
 
-## Violations Found in Current Implementation
-
-### Security Decision Violations
-
-**File:** `ContentView.swift`
-
-1. **Line 986:** `"keyID mismatch – assertion will not verify"`
-   - **Issue:** Infers security state (assertion won't verify)
-   - **Fix:** Change to: `"keyID mismatch – assertion generation blocked for state consistency"`
-   - **Rationale:** Block for state consistency, not security
-
-2. **Line 1010:** `"Bundle ID mismatch - assertion will NOT verify!"`
-   - **Issue:** Infers verification failure
-   - **Fix:** Change to: `"Bundle ID mismatch - may cause backend rejection"`
-   - **Rationale:** Warn about potential backend rejection, don't infer crypto validity
-
-3. **Line 209:** `"App Attest signatures will NOT verify if backend uses different bundle ID"`
-   - **Issue:** Infers cryptographic validity
-   - **Fix:** Change to: `"Bundle ID mismatch - backend may reject based on policy"`
-   - **Rationale:** Policy concern, not cryptographic validity
-
-### State Consistency Checks (Acceptable, but wording needs fix)
-
-**File:** `ContentView.swift`
-
-1. **Lines 984-996:** KeyID matching checks
-   - **Current:** Blocks with "will not verify" message
-   - **Status:** Acceptable for state consistency, but wording implies security decision
-   - **Fix:** Change error messages to focus on state consistency, not verification outcome
-   - **Example:** `"keyID mismatch – cannot generate assertion: state inconsistency"`
-
-###  Correctly Implemented
-
--  No local signature verification (`CryptoKit.isValidSignature` removed)
--  Assertions treated as opaque (decoding for logging only)
--  Backend responses displayed without interpretation
--  Evidence generation is observational only
--  No assertion caching across challenges
--  Raw bytes preserved and sent unchanged
-
----
-
-## Required Code Changes
-
-### Change 1: Remove Security Inference from Error Messages
-
-**File:** `ContentView.swift`
-
-**Lines 984-996:** Update error messages to focus on state consistency:
-
-```swift
-// BEFORE:
-backendError = "keyID mismatch – assertion will not verify"
-
-// AFTER:
-backendError = "keyID mismatch – cannot generate assertion: state inconsistency"
-```
-
-**Lines 1009-1010:** Update bundle ID warning:
-
-```swift
-// BEFORE:
-print("[ContentView]    WARNING: Bundle ID mismatch - assertion will NOT verify!")
-
-// AFTER:
-print("[ContentView] WARNING: Bundle ID mismatch - backend may reject based on policy")
-```
-
-**Line 209:** Update init warning:
-
-```swift
-// BEFORE:
-print("[ContentView]  App Attest signatures will NOT verify if backend uses different bundle ID")
-
-// AFTER:
-print("[ContentView] WARNING: Bundle ID mismatch - backend may reject based on policy")
-```
-
-### Change 2: Clarify State Consistency vs Security
-
-**File:** `ContentView.swift`
-
-**Lines 984-996:** Add comment clarifying purpose:
-
-```swift
-// State consistency check: Ensure keyID matches registered keyID
-// This prevents UI confusion, not a security decision
-guard let registeredKeyID = registeredKeyID, registeredKeyID == keyID else {
-    isGeneratingAssertion = false
-    backendError = "keyID mismatch – cannot generate assertion: state inconsistency"
-    print("[ContentView] ERROR: generateAssertion blocked – keyID does not match registered keyID (state consistency)")
-    return
-}
-```
-
----
-
-## Testing Checklist
-
-After implementing changes, verify:
-
-- [ ] No error messages infer verification success/failure
-- [ ] No warnings claim cryptographic validity/invalidity
-- [ ] State consistency checks are clearly labeled as such
-- [ ] Backend responses are displayed without interpretation
-- [ ] Evidence generation is clearly marked as observational
-- [ ] Assertions are never reused across challenges
-- [ ] All artifacts are sent unchanged to backend
-
----
-
 ## Summary
 
-The frontend's role is **transport and evidence generation only**. It must:
--  Generate artifacts via Apple APIs
--  Transport them unchanged
--  Log evidence for debugging
--  Display backend responses
+The frontend's role is transport and evidence generation. It:
+- Generates artifacts via Apple APIs
+- Transports them unchanged
+- Logs evidence for debugging
+- Displays backend responses
 
-It must **never**:
--  Infer cryptographic validity
--  Make trust decisions
--  Interpret security state
--  Cache or reuse assertions improperly
+It does not:
+- Infer cryptographic validity
+- Make trust decisions
+- Interpret security state
+- Cache or reuse assertions improperly
 
 All security decisions belong to the backend. The frontend is a byte transport layer with observational logging.
 
@@ -403,7 +289,6 @@ All security decisions belong to the backend. The frontend is a byte transport l
 
 **Referenced by (this contract is authoritative):**
 - **`FRONTEND_INVARIANTS_CHECKLIST.md`** - Quick reference checklist (this directory)
-- **`FRONTEND_VIOLATIONS_AND_FIXES.md`** - Violations found and fixes applied (this directory)
 
 **References (for context only):**
 - **`../APP_ATTEST_E2E_CONTRACT.md`** - E2E protocol contract (test app + backend)

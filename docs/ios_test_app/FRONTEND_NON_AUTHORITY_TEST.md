@@ -1,6 +1,6 @@
 # Frontend Non-Authority Test Checklist
 
-**Purpose:** Verify that the frontend does not make security decisions or block/allow operations based on backend responses.
+**Purpose:** Verify that the frontend displays data and records responses without making security decisions or blocking operations based on backend responses.
 
 **Scope:** Manual test checklist for the iOS test app.
 
@@ -22,10 +22,9 @@
 2. **Backend attribution:**
    - Search: `Backend response` → Should find all response displays
    - Search: `Backend returned status` → Should find status attribution
-   - Search: `backend performs` → Should find verification attribution
 
 3. **State-based errors:**
-   - Search: `flowID missing` → Should find state errors, not security errors
+   - Search: `flowID missing` → Should find state errors
    - Search: `keyID mismatch` → Should find state consistency checks
    - Search: `state error` → Should find state-based language
 
@@ -78,7 +77,6 @@
 **Pass Criteria:**
 
 - [ ] Response text is verbatim from backend
-- [ ] No frontend-added security language
 - [ ] Status clearly attributed to backend
 - [ ] Code shows backend attribution in response display
 
@@ -86,14 +84,14 @@
 
 ## Test 2: No Blocking Based on Backend Response
 
-**Objective:** Verify frontend does not block operations based on backend verification status.
+**Objective:** Verify frontend does not block operations based on backend response status.
 
 **Steps:**
 
 1. Complete registration successfully
 2. Generate assertion
 3. Send assertion to backend
-4. If backend returns "rejected", attempt to:
+4. When backend returns "rejected", attempt to:
    - Generate new assertion with same keyID
    - Send assertion again
    - Continue using the app
@@ -209,7 +207,7 @@
 
 - Error messages describe state issues ("flowID missing", "keyID mismatch")
 - No security language ("invalid", "unauthorized", "blocked")
-- Messages clarify what state is needed, not why it's needed
+- Messages clarify what state is needed
 
 **Code Reference:**
 
@@ -234,17 +232,10 @@
 
 **All tests expected to pass** to confirm frontend non-authority.
 
-**If any test fails:**
-
-- Document the failure
-- Identify where frontend makes security decisions
-- Fix to remove security decision-making
-- Re-run tests
-
 ---
 
 ## Related Documentation
 
-- **`ROLE_OF_FRONTEND.md`** - What the frontend does and never does
+- **`ROLE_OF_FRONTEND.md`** - What the frontend displays and forwards
 - **`FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md`** - Detailed contract
 - **`WHAT_THIS_TEST_APP_MEASURES.md`** - What can be observed vs cannot prove

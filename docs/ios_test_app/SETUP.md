@@ -2,7 +2,7 @@
 
 **Scope:** iOS Test App (`AppAttestDecoderTestApp`)
 
-This guide explains how to set up and run the diagnostic test app. No security claims are made.
+This guide explains how to set up and run the diagnostic test app.
 
 ---
 
@@ -13,7 +13,7 @@ This guide explains how to set up and run the diagnostic test app. No security c
 - **Xcode** (14.0 or later)
 - **App Attest capability** enabled for your App ID
 
-**Important:** App Attest does NOT work on simulators. You must use a physical device.
+**Note:** App Attest does not work on simulators. A physical device is required.
 
 ---
 

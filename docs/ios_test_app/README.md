@@ -1,18 +1,18 @@
 # iOS Test App Documentation
 
-This directory contains documentation for the iOS test app (`AppAttestDecoderTestApp`), a diagnostic tool for learning and debugging App Attest implementations.
+This directory contains documentation for the iOS test app (`AppAttestDecoderTestApp`), a diagnostic instrument for observing App Attest flows.
 
 ---
 
 ## Start Here
 
 **`GUIDE.md`** - Complete guide covering:
-- What the frontend is and is not
-- How to understand and use the app
+- What the frontend displays and forwards
+- How to use the app
 - Complete flow walkthrough
 - Concrete examples
 - Setup and usage
-- Testing and verification
+- Testing procedures
 - Troubleshooting
 
 Read `GUIDE.md` first for a complete understanding of the test app.
