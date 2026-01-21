@@ -303,12 +303,12 @@ These are not arguments, but they determine what branches run internally.
 
 From typical App Attest attestations:
 
-- **Format:** `apple-appattest` ✓
-- **Flags:** `0x40` with `[AT]` (attested credential data present) ✓
-- **Sign Count:** `0` (first attestation) ✓
-- **x5c:** 2-3 certs (leaf + intermediate + optional root) ✓
-- **Leaf Validity:** 3 days (normal for App Attest leafs) ✓
-- **Receipt:** Present, structure detected ✓
+- **Format:** `apple-appattest` (correct)
+- **Flags:** `0x40` with `[AT]` (attested credential data present) (correct)
+- **Sign Count:** `0` (first attestation) (correct)
+- **x5c:** 2-3 certs (leaf + intermediate + optional root) (correct)
+- **Leaf Validity:** 3 days (normal for App Attest leafs) (correct)
+- **Receipt:** Present, structure detected (correct)
 
 ---
 

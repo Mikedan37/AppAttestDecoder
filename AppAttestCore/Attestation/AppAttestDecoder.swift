@@ -52,4 +52,33 @@ public struct AppAttestDecoder {
     public func decodeAssertion(_ data: Data) throws -> AssertionObject {
         return try AssertionObject(data: data)
     }
+
+    /// Decodes an App Attest assertion in Apple map format (CBOR 0xa2 with "authenticatorData" and "signature").
+    /// Same CBOR path as inspection. Lossless: returns raw bytes only. Does NOT verify.
+    /// - Parameter data: Raw assertion bytes (CBOR map)
+    /// - Returns: (authenticatorData, signatureDER)
+    /// - Throws: CBORDecodingError or AssertionError if not a map or keys missing
+    public func decodeAssertionObject(_ data: Data) throws -> (authenticatorData: Data, signatureDER: Data) {
+        let cbor = try CBORDecoder.decode(data)
+        guard case .map(let pairs) = cbor else { throw AssertionError.invalidStructure }
+        var auth: Data?, sig: Data?
+        for (k, v) in pairs {
+            if case .textString("authenticatorData") = k, case .byteString(let b) = v { auth = b }
+            if case .textString("signature") = k, case .byteString(let b) = v { sig = b }
+        }
+        guard let a = auth, let s = sig else { throw AssertionError.invalidStructure }
+        return (a, s)
+    }
+
+    /// Decodes an App Attest assertion from base64 (standard, padded). Uses decodeAssertionObject(_:).
+    /// - Parameter base64: Base64-encoded assertion (standard alphabet, padding expected)
+    /// - Returns: (authenticatorData, signatureDER)
+    /// - Throws: AssertionError.invalidInput if base64 decode fails; AssertionError or CBORDecodingError from decodeAssertionObject
+    public func decodeAssertionObject(base64Encoded base64: String) throws -> (authenticatorData: Data, signatureDER: Data) {
+        let trimmed = base64.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let data = Data(base64Encoded: trimmed), !data.isEmpty else {
+            throw AssertionError.invalidInput(reason: "Base64 decode failed or empty")
+        }
+        return try decodeAssertionObject(data)
+    }
 }

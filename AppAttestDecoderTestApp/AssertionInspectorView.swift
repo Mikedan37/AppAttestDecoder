@@ -24,33 +24,18 @@ import CryptoKit
 
 struct AssertionInspectorView: View {
     let base64Assertion: String
-    let keyID: String? // Optional - if provided, use for direct context lookup
+    let keyID: String? // Optional - used to look up clientDataHash for virtual COSE reconstruction
     
     @StateObject private var contextStore = AppAttestContextStore.shared
     @State private var selectedMode: InspectionMode = .semantic
     @State private var output: String = ""
     @State private var partialDecodeInfo: String? // Informational, not an error
     @State private var fatalError: String? // Only for truly fatal errors
-    @State private var verificationStatus: VerificationStatus?
     @State private var isDecoding: Bool = false
+    @State private var showExportSheet = false
+    @State private var exportData: Data?
     
     @Environment(\.dismiss) private var dismiss
-    
-    enum VerificationStatus {
-        case verified(context: AppAttestContext, clientDataHash: Data)
-        case verificationFailed(reason: String)
-        case noContext
-        
-        var isVerified: Bool {
-            if case .verified = self { return true }
-            return false
-        }
-        
-        var isFailure: Bool {
-            if case .verificationFailed = self { return true }
-            return false
-        }
-    }
     
     enum InspectionMode: String, CaseIterable {
         case semantic = "Semantic"
@@ -58,13 +43,6 @@ struct AssertionInspectorView: View {
         case losslessTree = "Lossless Tree"
     }
     
-    /// Decode state for assertion inspection
-    /// Partial decode is expected behavior for App Attest assertions (they require server-side context)
-    enum AssertionDecodeState {
-        case full(AssertionObject)
-        case partial(reason: String, cbor: CBORValue, rawData: Data)
-        case invalid(error: Error)
-    }
     
     var body: some View {
         // No nested NavigationView - we're already in a NavigationStack from ContentView
@@ -119,47 +97,10 @@ struct AssertionInspectorView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(isDecoding || base64Assertion.isEmpty)
                 
-                // Verification Status (appears when verification is attempted)
-                if let status = verificationStatus {
-                    VStack(alignment: .leading, spacing: 4) {
-                        switch status {
-                        case .verified(let context, let clientDataHash):
-                            Label("Full Verified Decode", systemImage: "checkmark.circle.fill")
-                                .font(.caption)
-                                .foregroundColor(.green)
-                            Text("Verified using stored context for keyID: \(context.keyID)")
-                                .font(.system(.caption))
-                                .foregroundColor(.secondary)
-                            Text("clientDataHash: \(clientDataHash.prefix(8).map { String(format: "%02x", $0) }.joined(separator: " "))...")
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundColor(.secondary)
-                                .textSelection(.enabled)
-                        case .verificationFailed(let reason):
-                            Label("Verification Failed", systemImage: "xmark.circle")
-                                .font(.caption)
-                                .foregroundColor(.orange)
-                            Text(reason)
-                                .font(.system(.caption))
-                                .foregroundColor(.secondary)
-                                .textSelection(.enabled)
-                        case .noContext:
-                            Label("Partial / Context-Dependent Decode", systemImage: "info.circle")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                            Text("No stored context available. Full verification requires server-side clientDataHash and publicKey.")
-                                .font(.system(.caption))
-                                .foregroundColor(.secondary)
-                                .textSelection(.enabled)
-                        }
-                    }
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(status.isVerified ? Color.green.opacity(0.1) : (status.isFailure ? Color.orange.opacity(0.1) : Color.blue.opacity(0.1)))
-                    .cornerRadius(8)
-                }
+                // No verification status - this is an inspection tool only
                 
-                // Partial Decode Info (informational, not error) - only show if no verification status
-                if let info = partialDecodeInfo, verificationStatus == nil {
+                // Partial Decode Info (informational, not error)
+                if let info = partialDecodeInfo {
                     VStack(alignment: .leading, spacing: 4) {
                         Label("Partial / Context-Dependent Decode", systemImage: "info.circle")
                             .font(.caption)
@@ -206,6 +147,11 @@ struct AssertionInspectorView: View {
                                 Label("Copy", systemImage: "doc.on.doc")
                                     .font(.caption)
                             }
+                            
+                            Button(action: { exportAssertionData() }) {
+                                Label("Export", systemImage: "square.and.arrow.up")
+                                    .font(.caption)
+                            }
                         }
                         
                         ScrollView {
@@ -237,6 +183,11 @@ struct AssertionInspectorView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showExportSheet) {
+                if let exportData = exportData {
+                    AssertionExportShareSheet(exportData: exportData)
+                }
+            }
             .onAppear {
                 // Auto-decode on appear
                 decodeAssertion()
@@ -255,11 +206,6 @@ struct AssertionInspectorView: View {
     /// - Does NOT make trust decisions
     /// 
     /// All verification must occur on the server.
-    /// 
-    /// ERROR HANDLING PHILOSOPHY:
-    /// - Fatal errors: Invalid Base64, invalid CBOR structure
-    /// - Partial decode: Valid CBOR but COSE_Sign1 requires server-side context (expected for App Attest)
-    ///   Partial decode is NOT an error—it's expected behavior. We extract what we can.
     private func decodeAssertion() {
         partialDecodeInfo = nil
         fatalError = nil
@@ -274,380 +220,52 @@ struct AssertionInspectorView: View {
         }
         
         // Decode on background queue to avoid blocking UI
-        // This is inspection work, not verification, so it's safe to do off-main-thread
         DispatchQueue.global(qos: .userInitiated).async {
-            // Step 1: Try to decode CBOR first (to distinguish fatal vs non-fatal errors)
-            let cborValue: CBORValue
+            // Build inspection context from stored context
+            var inspectionContext: InspectionContext?
+            if let keyID = self.keyID,
+               let storedContext = self.contextStore.getContext(keyID: keyID) {
+                // Use the first stored clientDataHash (most recent)
+                let clientDataHash = storedContext.assertionClientDataHashes.first
+                inspectionContext = InspectionContext(
+                    keyID: keyID,
+                    clientDataHash: clientDataHash,
+                    publicKey: storedContext.publicKey.isEmpty ? nil : storedContext.publicKey
+                )
+            }
+            
+            // Use the core inspector module
+            let result: InspectionResult
             do {
-                cborValue = try CBORDecoder.decode(data)
+                result = try AppAttestInspector.inspect(data: data, context: inspectionContext)
             } catch {
-                // Fatal error: Invalid CBOR structure
                 DispatchQueue.main.async {
-                    self.fatalError = "Invalid CBOR structure: \(error.localizedDescription)"
+                    self.fatalError = "Inspection failed: \(error.localizedDescription)"
                     self.isDecoding = false
                 }
                 return
             }
             
-            // Step 2: Try full COSE_Sign1 decoding
-            let decodeState: AssertionDecodeState
-            var assertion: AssertionObject?
-            do {
-                // Structural decoding only - no verification
-                let decoder = AppAttestDecoder(teamID: nil)
-                assertion = try decoder.decodeAssertion(data)
-                decodeState = .full(assertion!)
-            } catch let decodeError {
-                // Partial decode: Valid CBOR but COSE_Sign1 incomplete/context-dependent
-                // This is EXPECTED for App Attest assertions—they require server-side context
-                // COSEError.invalidStructure and similar are expected when context is missing
-                let isExpectedPartialDecode: Bool
-                if decodeError is COSEError {
-                    // COSE errors indicate missing context (clientDataHash, publicKey), not malformed data
-                    // This is expected behavior for App Attest assertions
-                    isExpectedPartialDecode = true
-                } else if decodeError is AssertionError {
-                    // AssertionError also indicates structural issues that may be context-dependent
-                    isExpectedPartialDecode = true
-                } else {
-                    // Other errors (CBOR decode failures) are truly fatal
-                    isExpectedPartialDecode = false
-                }
-                
-                if isExpectedPartialDecode {
-                    decodeState = .partial(reason: decodeError.localizedDescription, cbor: cborValue, rawData: data)
-                } else {
-                    decodeState = .invalid(error: decodeError)
-                }
-            }
+            // Generate output based on selected mode
+            let decodedOutput = self.generateOutput(from: result, mode: self.selectedMode)
             
-            // Step 3: Attempt verification if we have a decoded assertion
-            var verificationStatus: VerificationStatus?
-            if let assertion = assertion {
-                print("[AssertionInspector] Attempting verification with keyID: \(self.keyID ?? "nil")")
-                verificationStatus = attemptVerification(assertion: assertion, rawData: data)
-                if let status = verificationStatus {
-                    switch status {
-                    case .verified:
-                        print("[AssertionInspector] ✅ Verification succeeded")
-                    case .verificationFailed(let reason):
-                        print("[AssertionInspector] ⚠️ Verification failed: \(reason)")
-                    case .noContext:
-                        print("[AssertionInspector] ℹ️ No context available")
-                    }
-                }
-            }
-            
-            // Step 4: Generate output based on decode state
-            let decodedOutput: String
-            switch decodeState {
-            case .full(let assertion):
-                // Select output mode (all are inspection-only views)
-                switch selectedMode {
-                case .semantic:
-                    // Human-readable semantic view
-                    decodedOutput = assertion.prettyPrint(colorized: false)
-                    
-                case .forensic:
-                    // Semantic + raw evidence view
-                    // For now, use prettyPrint with more detail
-                    // TODO: Add full forensic print support for assertions
-                    var forensicOutput = "Assertion Object (Forensic View)\n"
-                    forensicOutput += "========================================\n\n"
-                    forensicOutput += "Raw CBOR (Base64): \(assertion.rawData.base64EncodedString())\n"
-                    forensicOutput += "Raw CBOR Length: \(assertion.rawData.count) bytes\n\n"
-                    forensicOutput += assertion.prettyPrint(colorized: false)
-                    decodedOutput = forensicOutput
-                    
-                case .losslessTree:
-                    // Complete CBOR tree dump
-                    var output = "LOSSLESS TREE DUMP - Assertion Object\n"
-                    output += "========================================\n\n"
-                    output += "CBOR STRUCTURE\n"
-                    output += "---------------\n"
-                    output += dumpCBORValueForDisplay(cborValue, path: "assertionObject", indent: 0)
-                    output += "\n\nAUTHENTICATOR DATA\n"
-                    output += "------------------\n"
-                    output += dumpAuthenticatorDataForDisplay(assertion.authenticatorData, indent: 0)
-                    output += "\n\nCOSE_SIGN1 STRUCTURE\n"
-                    output += "--------------------\n"
-                    output += dumpCOSESign1ForDisplay(assertion.coseSign1, indent: 0)
-                    decodedOutput = output
-                }
-                
-                DispatchQueue.main.async {
-                    self.output = decodedOutput
+            DispatchQueue.main.async {
+                self.output = decodedOutput
+                // Show warnings if any
+                if !result.warnings.isEmpty {
+                    let warningMessages = result.warnings.map { $0.message }.joined(separator: "\n")
+                    self.partialDecodeInfo = warningMessages
+                } else {
                     self.partialDecodeInfo = nil
-                    self.fatalError = nil
-                    self.verificationStatus = verificationStatus
-                    self.isDecoding = false
                 }
-                
-            case .partial(let reason, let cbor, let rawData):
-                // Partial decode: Extract what we can from CBOR structure
-                // App Attest assertions are context-dependent by design
-                
-                // Extract authenticatorData and signature from CBOR even when COSE decode fails
-                // COSE_Sign1 is: [protected: bstr, unprotected: map, payload: bstr/null, signature: bstr]
-                var authenticatorDataBytes: Data?
-                var signatureBytes: Data?
-                
-                if case .array(let items) = cbor, items.count >= 4 {
-                    // Extract payload (index 2) - contains authenticatorData
-                    if case .byteString(let payload) = items[2] {
-                        authenticatorDataBytes = payload
-                    }
-                    
-                    // Extract signature (index 3)
-                    if case .byteString(let sig) = items[3] {
-                        signatureBytes = sig
-                    }
-                }
-                
-                // Attempt verification if we can extract the necessary data
-                var partialVerificationStatus: VerificationStatus?
-                if let authDataBytes = authenticatorDataBytes,
-                   let sigBytes = signatureBytes,
-                   let authData = try? AuthenticatorData(rawData: authDataBytes) {
-                    // Create a minimal assertion object for verification
-                    // We need to construct the COSE structure manually
-                    print("[AssertionInspector] Extracted authenticatorData (\(authDataBytes.count) bytes) and signature (\(sigBytes.count) bytes) from CBOR")
-                    
-                    // Try to verify using extracted data
-                    partialVerificationStatus = attemptVerificationWithExtractedData(
-                        authenticatorData: authData,
-                        authenticatorDataBytes: authDataBytes,
-                        signature: sigBytes
-                    )
-                }
-                
-                let partialOutput = generatePartialDecodeOutput(reason: reason, cbor: cbor, rawData: rawData, mode: selectedMode)
-                
-                DispatchQueue.main.async {
-                    self.output = partialOutput
-                    // If verification was attempted, show that status instead of generic partial decode message
-                    if let status = partialVerificationStatus {
-                        self.verificationStatus = status
-                        self.partialDecodeInfo = nil
-                    } else {
-                        // Informational messaging: partial decode is expected for App Attest assertions
-                        // This is NOT an error - it's how the protocol works
-                        self.partialDecodeInfo = "Partial decode is expected for App Attest assertions without server context. Assertions are verified server-side. This tool focuses on forensic inspection."
-                        self.verificationStatus = nil
-                    }
-                    self.fatalError = nil
-                    self.isDecoding = false
-                }
-                
-            case .invalid(let err):
-                // Unexpected error (shouldn't happen after CBOR decode succeeds)
-                DispatchQueue.main.async {
-                    self.fatalError = "Unexpected decode error: \(err.localizedDescription)"
-                    self.isDecoding = false
-                }
+                self.fatalError = nil
+                self.isDecoding = false
             }
         }
     }
     
-    // MARK: - Verification
-    
-    /// Attempt verification using extracted authenticatorData and signature (for partial decode cases)
-    private func attemptVerificationWithExtractedData(authenticatorData: AuthenticatorData, authenticatorDataBytes: Data, signature: Data) -> VerificationStatus {
-        print("[AssertionInspector] attemptVerificationWithExtractedData called")
-        print("[AssertionInspector] keyID provided: \(keyID ?? "nil")")
-        print("[AssertionInspector] Stored contexts count: \(contextStore.contexts.count)")
-        
-        // If keyID is provided, try direct lookup first (most efficient)
-        if let keyID = keyID {
-            print("[AssertionInspector] Looking up context for keyID: \(keyID)")
-            if let context = contextStore.getContext(keyID: keyID) {
-                print("[AssertionInspector] Context found! canVerifyAssertion: \(context.canVerifyAssertion)")
-                print("[AssertionInspector] publicKey: \(context.publicKey.count) bytes")
-                print("[AssertionInspector] assertionClientDataHashes count: \(context.assertionClientDataHashes.count)")
-                
-                if context.canVerifyAssertion {
-                    // Try each stored clientDataHash for this keyID
-                    for (index, clientDataHash) in context.assertionClientDataHashes.enumerated() {
-                        print("[AssertionInspector] Trying clientDataHash[\(index)]: \(clientDataHash.prefix(8).map { String(format: "%02x", $0) }.joined(separator: " "))...")
-                        if verifyAssertionWithExtractedData(
-                            authenticatorDataBytes: authenticatorDataBytes,
-                            signature: signature,
-                            publicKey: context.publicKey,
-                            clientDataHash: clientDataHash
-                        ) {
-                            print("[AssertionInspector] ✅ Verification succeeded with clientDataHash[\(index)]")
-                            return .verified(context: context, clientDataHash: clientDataHash)
-                        } else {
-                            print("[AssertionInspector] ❌ Verification failed with clientDataHash[\(index)]")
-                        }
-                    }
-                    // Context exists but verification failed
-                    return .verificationFailed(reason: "Stored context for keyID '\(keyID)' available but verification failed. Signature may not match stored clientDataHash.")
-                } else {
-                    // Context exists but incomplete
-                    print("[AssertionInspector] Context incomplete: hasPublicKey=\(context.hasPublicKey), hasAssertionContext=\(context.hasAssertionContext)")
-                    return .verificationFailed(reason: "Stored context for keyID '\(keyID)' is incomplete. Missing publicKey or clientDataHash.")
-                }
-            } else {
-                print("[AssertionInspector] No context found for keyID: \(keyID)")
-            }
-        }
-        
-        // Fallback: Try all stored contexts (for cases where keyID wasn't provided)
-        for (_, context) in contextStore.contexts {
-            guard context.canVerifyAssertion else { continue }
-            
-            // Try each stored clientDataHash
-            for clientDataHash in context.assertionClientDataHashes {
-                if verifyAssertionWithExtractedData(
-                    authenticatorDataBytes: authenticatorDataBytes,
-                    signature: signature,
-                    publicKey: context.publicKey,
-                    clientDataHash: clientDataHash
-                ) {
-                    return .verified(context: context, clientDataHash: clientDataHash)
-                }
-            }
-        }
-        
-        // Check if we have any context at all
-        let hasAnyContext = contextStore.contexts.values.contains { $0.hasPublicKey }
-        if hasAnyContext {
-            return .verificationFailed(reason: "Stored context available but verification failed. Signature may not match stored clientDataHash.")
-        }
-        
-        return .noContext
-    }
-    
-    /// Attempt to verify assertion using stored context
-    /// If keyID is provided, uses direct lookup. Otherwise tries all contexts.
-    private func attemptVerification(assertion: AssertionObject, rawData: Data) -> VerificationStatus {
-        // If keyID is provided, try direct lookup first (most efficient)
-        if let keyID = keyID {
-            print("[AssertionInspector] Looking up context for keyID: \(keyID)")
-            if let context = contextStore.getContext(keyID: keyID) {
-                print("[AssertionInspector] Context found! canVerifyAssertion: \(context.canVerifyAssertion)")
-                print("[AssertionInspector] publicKey: \(context.publicKey.count) bytes")
-                print("[AssertionInspector] assertionClientDataHashes count: \(context.assertionClientDataHashes.count)")
-                
-                if context.canVerifyAssertion {
-                    // Try each stored clientDataHash for this keyID
-                    for (index, clientDataHash) in context.assertionClientDataHashes.enumerated() {
-                        print("[AssertionInspector] Trying clientDataHash[\(index)]: \(clientDataHash.prefix(8).map { String(format: "%02x", $0) }.joined(separator: " "))...")
-                        if verifyAssertion(assertion: assertion, publicKey: context.publicKey, clientDataHash: clientDataHash) {
-                            print("[AssertionInspector] ✅ Verification succeeded with clientDataHash[\(index)]")
-                            return .verified(context: context, clientDataHash: clientDataHash)
-                        } else {
-                            print("[AssertionInspector] ❌ Verification failed with clientDataHash[\(index)]")
-                        }
-                    }
-                    // Context exists but verification failed
-                    return .verificationFailed(reason: "Stored context for keyID '\(keyID)' available but verification failed. Signature may not match stored clientDataHash.")
-                } else {
-                    // Context exists but incomplete
-                    print("[AssertionInspector] Context incomplete: hasPublicKey=\(context.hasPublicKey), hasAssertionContext=\(context.hasAssertionContext)")
-                    return .verificationFailed(reason: "Stored context for keyID '\(keyID)' is incomplete. Missing publicKey or clientDataHash.")
-                }
-            } else {
-                print("[AssertionInspector] No context found for keyID: \(keyID)")
-            }
-        }
-        
-        // Fallback: Try all stored contexts (for cases where keyID wasn't provided)
-        for (_, context) in contextStore.contexts {
-            guard context.canVerifyAssertion else { continue }
-            
-            // Try each stored clientDataHash
-            for clientDataHash in context.assertionClientDataHashes {
-                if verifyAssertion(assertion: assertion, publicKey: context.publicKey, clientDataHash: clientDataHash) {
-                    return .verified(context: context, clientDataHash: clientDataHash)
-                }
-            }
-        }
-        
-        // Check if we have any context at all
-        let hasAnyContext = contextStore.contexts.values.contains { $0.hasPublicKey }
-        if hasAnyContext {
-            return .verificationFailed(reason: "Stored context available but verification failed. Signature may not match stored clientDataHash.")
-        }
-        
-        return .noContext
-    }
-    
-    /// Verify assertion signature using extracted authenticatorData and signature bytes
-    /// Verifies signature over: authenticatorData || clientDataHash
-    private func verifyAssertionWithExtractedData(authenticatorDataBytes: Data, signature: Data, publicKey: Data, clientDataHash: Data) -> Bool {
-        print("[AssertionInspector] verifyAssertionWithExtractedData called")
-        print("[AssertionInspector] authenticatorData length: \(authenticatorDataBytes.count) bytes")
-        print("[AssertionInspector] clientDataHash length: \(clientDataHash.count) bytes")
-        print("[AssertionInspector] signature length: \(signature.count) bytes")
-        
-        // App Attest uses ES256 (ECDSA P-256 SHA-256)
-        // Signature is over: authenticatorData || clientDataHash
-        
-        // Construct signed data
-        let signedData = authenticatorDataBytes + clientDataHash
-        print("[AssertionInspector] signedData length: \(signedData.count) bytes")
-        
-        // Extract public key from certificate format (subjectPublicKeyBits)
-        // For P-256, this is typically 0x04 || x || y (uncompressed point, 65 bytes)
-        guard publicKey.count == 65, publicKey[0] == 0x04 else {
-            print("[AssertionInspector] Invalid public key format: \(publicKey.count) bytes")
-            return false
-        }
-        
-        // Create P256 public key from uncompressed point format
-        // publicKey is already in format: 0x04 || x || y (65 bytes)
-        // CryptoKit's rawRepresentation expects exactly this format
-        guard let publicKeyPoint = try? P256.Signing.PublicKey(rawRepresentation: publicKey) else {
-            print("[AssertionInspector] Failed to create P256 public key from raw representation")
-            return false
-        }
-        
-        // Verify signature
-        // Note: COSE signatures are in raw format (r || s, 64 bytes)
-        guard signature.count == 64 else {
-            print("[AssertionInspector] Invalid signature length: \(signature.count) bytes")
-            return false
-        }
-        
-        let r = signature.subdata(in: 0..<32)
-        let s = signature.subdata(in: 32..<64)
-        
-        // Create signature from r and s
-        // P256.Signing.ECDSASignature expects raw format (r || s)
-        let rawSignature = r + s
-        guard let ecdsaSignature = try? P256.Signing.ECDSASignature(rawRepresentation: rawSignature) else {
-            print("[AssertionInspector] Failed to create ECDSA signature")
-            return false
-        }
-        
-        // Verify signature
-        let hash = SHA256.hash(data: signedData)
-        print("[AssertionInspector] Hash of signed data: \(hash.prefix(8).map { String(format: "%02x", $0) }.joined(separator: " "))...")
-        let isValid = publicKeyPoint.isValidSignature(ecdsaSignature, for: hash)
-        print("[AssertionInspector] Signature valid: \(isValid)")
-        return isValid
-    }
-    
-    /// Verify COSE_Sign1 signature for App Attest assertion
-    /// Verifies signature over: authenticatorData || clientDataHash
-    private func verifyAssertion(assertion: AssertionObject, publicKey: Data, clientDataHash: Data) -> Bool {
-        print("[AssertionInspector] verifyAssertion called")
-        print("[AssertionInspector] authenticatorData length: \(assertion.authenticatorData.rawData.count) bytes")
-        print("[AssertionInspector] clientDataHash length: \(clientDataHash.count) bytes")
-        
-        // App Attest uses ES256 (ECDSA P-256 SHA-256)
-        // Signature is over: authenticatorData || clientDataHash
-        
-        // Delegate to the extracted data version
-        return verifyAssertionWithExtractedData(
-            authenticatorDataBytes: assertion.authenticatorData.rawData,
-            signature: assertion.signature,
-            publicKey: publicKey,
-            clientDataHash: clientDataHash
-        )
-    }
+    // MARK: - Verification (REMOVED - This is an inspection tool only, not a verifier)
+    // All verification code has been removed. This tool only decodes and displays assertion data.
     
     // MARK: - Actions
     
@@ -659,131 +277,380 @@ struct AssertionInspectorView: View {
         UIPasteboard.general.string = base64Assertion
     }
     
-    // MARK: - Partial Decode Support
-    
-    /// Generate output for partial decode state
-    /// Extracts available fields from CBOR even when COSE_Sign1 parsing fails
-    /// App Attest assertions are context-dependent by design—this is expected, not an error
-    private func generatePartialDecodeOutput(reason: String, cbor: CBORValue, rawData: Data, mode: InspectionMode) -> String {
-        var output = ""
+    private func exportAssertionData() {
+        // Extract export data from current output state
+        guard let data = Data(base64Encoded: base64Assertion.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return
+        }
         
-        // Try to extract authenticatorData from CBOR array structure
-        // COSE_Sign1 is: [protected: bstr, unprotected: map, payload: bstr/null, signature: bstr]
-        var authenticatorDataBytes: Data?
-        var signatureBytes: Data?
-        
-        if case .array(let items) = cbor, items.count >= 4 {
-            // Extract payload (index 2) - contains authenticatorData
-            if case .byteString(let payload) = items[2] {
-                authenticatorDataBytes = payload
+        // Try to inspect again to get structured result for export
+        Task {
+            do {
+                let result = try await Task.detached(priority: .userInitiated) {
+                    try AppAttestInspector.inspect(data: data, context: nil)
+                }.value
+                
+                await MainActor.run {
+                    exportInspectionData(result)
+                }
+            } catch {
+                // If inspection fails, create minimal export from output text
+                await MainActor.run {
+                    let minimalExport: [String: Any] = [
+                        "timestamp": ISO8601DateFormatter().string(from: Date()),
+                        "base64Input": base64Assertion,
+                        "decodedOutput": output,
+                        "note": "Export generated from inspection output. For structured data, ensure inspection succeeds."
+                    ]
+                    if let jsonData = try? JSONSerialization.data(withJSONObject: minimalExport, options: .prettyPrinted) {
+                        exportData = jsonData
+                        showExportSheet = true
+                    }
+                }
             }
-            
-            // Extract signature (index 3)
-            if case .byteString(let sig) = items[3] {
-                signatureBytes = sig
+        }
+    }
+    
+    private func exportInspectionData(_ result: InspectionResult) {
+        var exportDict: [String: Any] = [:]
+        
+        // Basic metadata
+        exportDict["artifactType"] = String(describing: result.artifactType)
+        exportDict["decodeStatus"] = String(describing: result.decodeStatus)
+        exportDict["timestamp"] = ISO8601DateFormatter().string(from: Date())
+        
+        // Sig_structure CBOR and hash (if available)
+        if let virtualCOSE = result.virtualCOSE {
+            if let sigStructureCBOR = virtualCOSE.sigStructureCBOR {
+                exportDict["sigStructureCBOR"] = sigStructureCBOR.base64EncodedString()
+            }
+            if let sigStructureHash = virtualCOSE.sigStructureHash {
+                exportDict["sigStructureHash"] = sigStructureHash.base64EncodedString()
+                exportDict["sigStructureHashHex"] = sigStructureHash.map { String(format: "%02x", $0) }.joined(separator: "")
             }
         }
         
+        // Parsed summary
+        var summary: [String: Any] = [:]
+        if let parsed = result.parsedAuthData {
+            summary["authenticatorDataLength"] = parsed.rawBytes.count
+            summary["rpIdHash"] = parsed.authenticatorData.rpIdHash.base64EncodedString()
+            summary["flags"] = String(format: "0x%02x", parsed.authenticatorData.flags.rawValue)
+            summary["signCount"] = parsed.authenticatorData.signCount
+            summary["attestedCredentialDataPresent"] = parsed.attestedCredentialDataPresent
+            summary["extensionsPresent"] = parsed.extensionsPresent
+        }
+        if let sig = result.signatureBytes {
+            summary["signatureLength"] = sig.count
+            summary["signatureBase64"] = sig.base64EncodedString()
+        }
+        exportDict["parsedSummary"] = summary
+        
+        // Warnings
+        if !result.warnings.isEmpty {
+            exportDict["warnings"] = result.warnings.map { $0.message }
+        }
+        
+        // Missing context
+        if !result.missingContext.isEmpty {
+            exportDict["missingContext"] = result.missingContext
+        }
+        
+        // Convert to JSON
+        if let jsonData = try? JSONSerialization.data(withJSONObject: exportDict, options: .prettyPrinted) {
+            exportData = jsonData
+            showExportSheet = true
+        }
+    }
+    
+    // MARK: - Output Generation
+    
+    /// Generate formatted output from inspection result
+    private func generateOutput(from result: InspectionResult, mode: InspectionMode) -> String {
         switch mode {
         case .semantic:
-            output += "Partial / Context-Dependent Decode\n"
-            output += "========================================\n\n"
-            output += "Partial decode is expected for App Attest assertions without server context.\n"
-            output += "Full COSE verification requires:\n"
-            output += "  • clientDataHash (from server challenge)\n"
-            output += "  • publicKey (from attestation certificate)\n\n"
-            output += "Assertions are verified server-side. This tool focuses on forensic inspection.\n\n"
-            output += "Available Fields:\n"
-            output += "-----------------\n"
-            
-            if let authData = authenticatorDataBytes {
-                output += "Authenticator Data: \(authData.count) bytes\n"
-                // Try to parse authenticatorData structure
-                if let authDataParsed = try? AuthenticatorData(rawData: authData) {
-                    output += "  RP ID Hash: \(authDataParsed.rpIdHash.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
-                    output += "  Flags: 0x\(String(format: "%02x", authDataParsed.flags.rawValue))\n"
-                    output += "    userPresent: \(authDataParsed.flags.userPresent)\n"
-                    output += "    userVerified: \(authDataParsed.flags.userVerified)\n"
-                    output += "    extensionsIncluded: \(authDataParsed.flags.extensionsIncluded)\n"
-                    output += "  Sign Count: \(authDataParsed.signCount)\n"
-                } else {
-                    output += "  (AuthenticatorData structure parse failed)\n"
-                }
-            } else {
-                output += "Authenticator Data: Not available in payload\n"
-            }
-            
-            if let sig = signatureBytes {
-                output += "Signature: \(sig.count) bytes\n"
-                output += "  Hex (first 32): \(sig.prefix(32).map { String(format: "%02x", $0) }.joined(separator: " "))\n"
-            } else {
-                output += "Signature: Not available\n"
-            }
-            
+            return generateSemanticOutput(from: result)
         case .forensic:
-            output += "Partial / Context-Dependent Decode (Forensic View)\n"
-            output += "========================================\n\n"
-            output += "COSE decode limitation: \(reason)\n"
-            output += "Note: App Attest assertions are context-dependent by design.\n"
-            output += "Full COSE verification requires server-side context (clientDataHash, publicKey).\n"
-            output += "This partial decode is expected and correct for forensic inspection.\n\n"
-            output += "CBOR STRUCTURE\n"
-            output += "---------------\n"
-            output += dumpCBORValueForDisplay(cbor, path: "assertionObject", indent: 0)
-            output += "\n\nEXTRACTED FIELDS\n"
-            output += "----------------\n"
-            
-            if let authData = authenticatorDataBytes {
-                output += "Payload (AuthenticatorData): \(authData.count) bytes\n"
-                output += "  Base64: \(authData.base64EncodedString())\n"
-                output += "  Hex (first 64): \(authData.prefix(64).map { String(format: "%02x", $0) }.joined(separator: " "))"
-                if authData.count > 64 { output += "..." }
-                output += "\n"
-                
-                if let authDataParsed = try? AuthenticatorData(rawData: authData) {
-                    output += "\nParsed AuthenticatorData:\n"
-                    output += dumpAuthenticatorDataForDisplay(authDataParsed, indent: 2)
-                }
-            }
-            
-            if let sig = signatureBytes {
-                output += "\nSignature: \(sig.count) bytes\n"
-                output += "  Base64: \(sig.base64EncodedString())\n"
-                output += "  Hex: \(sig.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
-            }
-            
-            output += "\nRAW BYTES\n"
-            output += "---------\n"
-            output += "Total Length: \(rawData.count) bytes\n"
-            output += "Base64: \(rawData.base64EncodedString())\n"
-            
+            return generateForensicOutput(from: result)
         case .losslessTree:
-            output += "LOSSLESS TREE DUMP - Assertion Object (Partial / Context-Dependent)\n"
-            output += "========================================\n\n"
-            output += "COSE decode limitation: \(reason)\n"
-            output += "Note: Partial decode is expected for App Attest assertions.\n"
-            output += "Full COSE verification requires server-side context.\n\n"
+            return generateLosslessTreeOutput(from: result)
+        }
+    }
+    
+    /// Generate semantic (human-readable) output
+    private func generateSemanticOutput(from result: InspectionResult) -> String {
+        var output = ""
+        
+        output += "Assertion Object (Decoded)\n"
+        output += "========================================\n\n"
+        
+        // Show authenticator data
+        if let parsed = result.parsedAuthData {
+            output += "Authenticator Data\n"
+            output += "------------------\n"
+            output += "Length: \(parsed.rawBytes.count) bytes\n"
+            output += "RP ID Hash: \(parsed.authenticatorData.rpIdHash.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+            output += "Flags: 0x\(String(format: "%02x", parsed.authenticatorData.flags.rawValue))\n"
+            output += "  userPresent: \(parsed.authenticatorData.flags.userPresent)\n"
+            output += "  userVerified: \(parsed.authenticatorData.flags.userVerified)\n"
+            
+            // Report flag vs payload status separately
+            output += "  attestedCredentialData:\n"
+            output += "    flag: \(parsed.hasATFlag ? "set (0x40)" : "not set")\n"
+            output += "    payload: \(parsed.hasATPayload ? "present" : "absent")\n"
+            if parsed.hasATFlag && !parsed.hasATPayload {
+                output += "    ⚠️ status: inconsistent (flag set but no payload; treating as not present)\n"
+            } else {
+                output += "    status: \(parsed.attestedCredentialDataPresent ? "present" : "not present")\n"
+            }
+            
+            output += "  extensionsIncluded:\n"
+            output += "    flag: \(parsed.hasEDFlag ? "set (0x80)" : "not set")\n"
+            output += "    payload: \(parsed.hasEDPayload ? "present" : "absent")\n"
+            if parsed.hasEDFlag && !parsed.hasEDPayload {
+                output += "    ⚠️ status: inconsistent (flag set but no payload; treating as not present)\n"
+            } else {
+                output += "    status: \(parsed.extensionsPresent ? "present" : "not present")\n"
+            }
+            output += "Sign Count: \(parsed.authenticatorData.signCount)\n\n"
+        } else if let authDataBytes = result.authenticatorDataBytes {
+            output += "Authenticator Data\n"
+            output += "------------------\n"
+            output += "Length: \(authDataBytes.count) bytes\n"
+            output += "(Structure parsing failed - raw bytes available)\n\n"
+        }
+        
+        // Show signature
+        if let sig = result.signatureBytes {
+            output += "Signature\n"
+            output += "---------\n"
+            output += "Length: \(sig.count) bytes\n"
+            output += "Format: \(sig.count == 64 ? "Raw (r||s)" : sig.count >= 70 && sig.count <= 72 ? "ASN.1 DER" : "Unknown")\n"
+            output += "Hex (first 32 bytes): \(sig.prefix(32).map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+            if sig.count > 32 {
+                output += "Hex (last 16 bytes): \(sig.suffix(16).map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+            }
+            output += "\n"
+        }
+        
+        // Show decode status
+        output += "Decode Status\n"
+        output += "-------------\n"
+        switch result.decodeStatus {
+        case .success:
+            output += "✅ Assertion object decoded successfully\n"
+            if let parsed = result.parsedAuthData {
+                output += "   - AuthenticatorData: ✅ Parsed (\(parsed.rawBytes.count) bytes)\n"
+            }
+            if let sig = result.signatureBytes {
+                output += "   - Signature: ✅ Extracted (\(sig.count) bytes)\n"
+            }
+            output += "\n"
+            output += "Note: This object does not contain a COSE envelope by design.\n"
+            output += "Cryptographic verification requires external context:\n"
+            output += "  • clientDataHash (from server challenge)\n"
+            output += "  • public key (from attestation certificate)\n"
+        case .partial(let reason):
+            output += "⚠️ Partial decode: \(reason)\n"
+        case .failed(let error):
+            output += "❌ Decode failed: \(error)\n"
+        }
+        
+        // Add virtual COSE envelope section if available
+        if let virtualCOSE = result.virtualCOSE {
+            output += "\n"
+            output += formatVirtualCOSE(virtualCOSE, indent: 0)
+        }
+        
+        return output
+    }
+    
+    /// Format virtual COSE envelope for display
+    private func formatVirtualCOSE(_ virtualCOSE: VirtualCOSESign1, indent: Int = 0) -> String {
+        let indentStr = String(repeating: " ", count: indent)
+        var output = ""
+        
+        output += "\(indentStr)Virtual COSE_Sign1 Envelope (Reconstructed)\n"
+        output += "\(indentStr)==========================================\n"
+        output += "\(indentStr)This COSE envelope is reconstructed according to the App Attest specification.\n"
+        output += "\(indentStr)Assertion objects are not serialized as COSE, but signatures are computed over this structure.\n\n"
+        
+        output += "\(indentStr)Protected Headers:\n"
+        output += "\(indentStr)  alg: ES256 (-7)\n"
+        
+        output += "\(indentStr)Unprotected Headers:\n"
+        output += "\(indentStr)  (empty)\n\n"
+        
+        output += "\(indentStr)Payload (authenticatorData || clientDataHash):\n"
+        if let clientDataHash = virtualCOSE.payloadComponents.clientDataHash {
+            output += "\(indentStr)  authenticatorData: \(virtualCOSE.payloadComponents.authenticatorData.count) bytes\n"
+            output += "\(indentStr)    hex (first 32): \(virtualCOSE.payloadComponents.authenticatorData.prefix(32).map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+            output += "\(indentStr)  clientDataHash: \(clientDataHash.count) bytes\n"
+            output += "\(indentStr)    hex: \(clientDataHash.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+            output += "\(indentStr)  concatenated payload: \(virtualCOSE.payload?.count ?? 0) bytes\n"
+        } else {
+            output += "\(indentStr)  authenticatorData: \(virtualCOSE.payloadComponents.authenticatorData.count) bytes\n"
+            output += "\(indentStr)    hex (first 32): \(virtualCOSE.payloadComponents.authenticatorData.prefix(32).map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+            output += "\(indentStr)  clientDataHash: <missing - required for full payload reconstruction>\n"
+            output += "\(indentStr)  concatenated payload: <incomplete - clientDataHash not available>\n"
+        }
+        
+        output += "\(indentStr)\n"
+        output += "\(indentStr)Signature:\n"
+        output += "\(indentStr)  format: ASN.1 DER\n"
+        output += "\(indentStr)  length: \(virtualCOSE.signature.count) bytes\n"
+        output += "\(indentStr)  hex (first 32): \(virtualCOSE.signature.prefix(32).map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+        if virtualCOSE.signature.count > 32 {
+            output += "\(indentStr)  hex (last 16): \(virtualCOSE.signature.suffix(16).map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+        }
+        
+        // Display Sig_structure bytes and SHA256 hash if available
+        if let sigStructureCBOR = virtualCOSE.sigStructureCBOR,
+           let sigStructureHash = virtualCOSE.sigStructureHash {
+            output += "\(indentStr)\n"
+            output += "\(indentStr)COSE_Sign1 Sig_structure (CBOR-encoded):\n"
+            output += "\(indentStr)  Structure: [\"Signature1\", protected, external_aad, payload]\n"
+            output += "\(indentStr)  Length: \(sigStructureCBOR.count) bytes\n"
+            output += "\(indentStr)  CBOR (Base64): \(sigStructureCBOR.base64EncodedString())\n"
+            output += "\(indentStr)  CBOR (hex, first 64): \(sigStructureCBOR.prefix(64).map { String(format: "%02x", $0) }.joined(separator: " "))"
+            if sigStructureCBOR.count > 64 {
+                output += "..."
+            }
+            output += "\n"
+            output += "\(indentStr)  SHA256 hash: \(sigStructureHash.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+            output += "\(indentStr)  SHA256 hash (Base64): \(sigStructureHash.base64EncodedString())\n"
+        }
+        
+        return output
+    }
+    
+    /// Generate forensic (raw evidence) output
+    private func generateForensicOutput(from result: InspectionResult) -> String {
+        var output = ""
+        
+        output += "Assertion Object Decoded (Forensic View)\n"
+        output += "========================================\n\n"
+        
+        switch result.decodeStatus {
+        case .success:
+            output += "Decode status: ✅ Full decode successful\n"
+        case .partial(let reason):
+            output += "Decode status: ⚠️ Partial decode: \(reason)\n"
+        case .failed(let error):
+            output += "Decode status: ❌ Decode failed: \(error)\n"
+        }
+        
+        if !result.missingContext.isEmpty {
+            output += "Missing context:\n"
+            for item in result.missingContext {
+                output += "  • \(item)\n"
+            }
+        }
+        output += "\n"
+        
+        // CBOR structure
+        if let cbor = result.cborValue {
             output += "CBOR STRUCTURE\n"
             output += "---------------\n"
             output += dumpCBORValueForDisplay(cbor, path: "assertionObject", indent: 0)
+            output += "\n\n"
+        }
+        
+        // Extracted fields
+        output += "EXTRACTED FIELDS\n"
+        output += "----------------\n"
+        
+        if let authData = result.authenticatorDataBytes {
+            output += "Payload (AuthenticatorData): \(authData.count) bytes\n"
+            output += "  Base64: \(authData.base64EncodedString())\n"
+            output += "  Hex (first 64): \(authData.prefix(64).map { String(format: "%02x", $0) }.joined(separator: " "))"
+            if authData.count > 64 { output += "..." }
+            output += "\n"
             
-            if let authData = authenticatorDataBytes {
-                output += "\n\nEXTRACTED AUTHENTICATOR DATA\n"
-                output += "----------------------------\n"
-                if let authDataParsed = try? AuthenticatorData(rawData: authData) {
-                    output += dumpAuthenticatorDataForDisplay(authDataParsed, indent: 0)
-                } else {
-                    output += "Raw bytes: \(authData.count) bytes\n"
-                    output += "Hex: \(authData.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+            if let parsed = result.parsedAuthData {
+                output += "\nParsed AuthenticatorData:\n"
+                
+                // Show warnings if any
+                if !parsed.warnings.isEmpty {
+                    for warning in parsed.warnings {
+                        output += "  ⚠️ \(warning.message)\n"
+                    }
                 }
+                
+                output += dumpAuthenticatorDataForDisplay(parsed, indent: 2)
             }
-            
-            if let sig = signatureBytes {
-                output += "\n\nEXTRACTED SIGNATURE\n"
-                output += "-------------------\n"
-                output += "Length: \(sig.count) bytes\n"
-                output += "Hex: \(sig.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+        }
+        
+        if let sig = result.signatureBytes {
+            output += "\nSignature: \(sig.count) bytes\n"
+            output += "  Base64: \(sig.base64EncodedString())\n"
+            output += "  Hex: \(sig.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+        }
+        
+        output += "\nRAW BYTES\n"
+        output += "---------\n"
+        output += "Total Length: \(result.rawData.count) bytes\n"
+        output += "Base64: \(result.rawData.base64EncodedString())\n"
+        
+        // Add virtual COSE envelope section if available
+        if let virtualCOSE = result.virtualCOSE {
+            output += "\n"
+            output += formatVirtualCOSE(virtualCOSE, indent: 0)
+        }
+        
+        return output
+    }
+    
+    /// Generate lossless tree output
+    private func generateLosslessTreeOutput(from result: InspectionResult) -> String {
+        var output = ""
+        
+        output += "LOSSLESS TREE DUMP - Assertion Object\n"
+        output += "========================================\n"
+        output += "This is the complete CBOR structure for an App Attest assertion.\n"
+        output += "Assertion objects are CBOR maps, not COSE_Sign1 messages.\n\n"
+        
+        switch result.decodeStatus {
+        case .success:
+            output += "Decode status: ✅ Full decode successful\n"
+        case .partial(let reason):
+            output += "Decode status: ⚠️ Partial decode: \(reason)\n"
+        case .failed(let error):
+            output += "Decode status: ❌ Decode failed: \(error)\n"
+        }
+        output += "\n"
+        
+        // CBOR structure
+        if let cbor = result.cborValue {
+            output += "CBOR STRUCTURE\n"
+            output += "---------------\n"
+            output += dumpCBORValueForDisplay(cbor, path: "assertionObject", indent: 0)
+        }
+        
+        // Extracted authenticator data
+        if let authData = result.authenticatorDataBytes {
+            output += "\n\nEXTRACTED AUTHENTICATOR DATA\n"
+            output += "----------------------------\n"
+            if let parsed = result.parsedAuthData {
+                output += dumpAuthenticatorDataForDisplay(parsed, indent: 0)
+            } else {
+                output += "Raw bytes: \(authData.count) bytes\n"
+                output += "Hex: \(authData.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
             }
+        }
+        
+        // Extracted signature
+        if let sig = result.signatureBytes {
+            output += "\n\nEXTRACTED SIGNATURE\n"
+            output += "-------------------\n"
+            output += "Length: \(sig.count) bytes\n"
+            output += "Hex: \(sig.map { String(format: "%02x", $0) }.joined(separator: " "))\n"
+        }
+        
+        // Add virtual COSE envelope section if available
+        if let virtualCOSE = result.virtualCOSE {
+            output += "\n"
+            output += formatVirtualCOSE(virtualCOSE, indent: 0)
         }
         
         return output
@@ -850,18 +717,36 @@ struct AssertionInspectorView: View {
         return output
     }
     
-    private func dumpAuthenticatorDataForDisplay(_ authData: AuthenticatorData, indent: Int) -> String {
+    private func dumpAuthenticatorDataForDisplay(_ parsed: ParsedAuthData, indent: Int) -> String {
         let indentStr = String(repeating: " ", count: indent)
+        let authData = parsed.authenticatorData
         var output = ""
         
         output += "\(indentStr)rpIdHash: \(authData.rpIdHash.map { String(format: "%02x", $0) }.joined(separator: " ")) (32 bytes)\n"
         output += "\(indentStr)flags: 0x\(String(format: "%02x", authData.flags.rawValue))\n"
         output += "\(indentStr)  userPresent: \(authData.flags.userPresent)\n"
         output += "\(indentStr)  userVerified: \(authData.flags.userVerified)\n"
-        output += "\(indentStr)  attestedCredentialData: \(authData.flags.attestedCredentialData)\n"
-        output += "\(indentStr)  extensionsIncluded: \(authData.flags.extensionsIncluded)\n"
+        
+        // Report flag vs payload status separately (using shared parsed data)
+        output += "\(indentStr)  attestedCredentialData:\n"
+        output += "\(indentStr)    flag: \(parsed.hasATFlag ? "set (0x40)" : "not set")\n"
+        output += "\(indentStr)    payload: \(parsed.hasATPayload ? "present" : "absent")\n"
+        if parsed.hasATFlag && !parsed.hasATPayload {
+            output += "\(indentStr)    ⚠️ status: inconsistent (flag set but no payload; treating as not present)\n"
+        } else {
+            output += "\(indentStr)    status: \(parsed.attestedCredentialDataPresent ? "present" : "not present")\n"
+        }
+        
+        output += "\(indentStr)  extensionsIncluded:\n"
+        output += "\(indentStr)    flag: \(parsed.hasEDFlag ? "set (0x80)" : "not set")\n"
+        output += "\(indentStr)    payload: \(parsed.hasEDPayload ? "present" : "absent")\n"
+        if parsed.hasEDFlag && !parsed.hasEDPayload {
+            output += "\(indentStr)    ⚠️ status: inconsistent (flag set but no payload; treating as not present)\n"
+        } else {
+            output += "\(indentStr)    status: \(parsed.extensionsPresent ? "present" : "not present")\n"
+        }
         output += "\(indentStr)signCount: \(authData.signCount)\n"
-        output += "\(indentStr)rawData: \(authData.rawData.count) bytes\n"
+        output += "\(indentStr)rawData: \(parsed.rawBytes.count) bytes\n"
         
         return output
     }
@@ -895,5 +780,23 @@ struct AssertionInspectorView: View {
         output += "\(indentStr)signature: \(sign1.signature.map { String(format: "%02x", $0) }.joined(separator: " ")) (\(sign1.signature.count) bytes)\n"
         
         return output
+    }
+}
+
+// Helper for sharing export data from AssertionInspectorView
+struct AssertionExportShareSheet: UIViewControllerRepresentable {
+    let exportData: Data
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("app-attest-assertion-\(UUID().uuidString).json")
+        
+        try? exportData.write(to: tempURL)
+        
+        return UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
+        // No updates needed
     }
 }

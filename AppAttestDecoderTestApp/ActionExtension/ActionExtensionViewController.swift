@@ -43,7 +43,7 @@ class ActionExtensionViewController: SLComposeServiceViewController {
         print("[ActionExtension] viewDidLoad called - extension is loading!")
         print("[ActionExtension] Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")")
         
-        // Check if App Attest is supported
+        // Check if App Attest is supported (lightweight check only)
         guard service.isSupported else {
             print("[ActionExtension] ERROR: App Attest not supported")
             showError("App Attest not supported on this device")
@@ -51,6 +51,7 @@ class ActionExtensionViewController: SLComposeServiceViewController {
         }
         
         print("[ActionExtension] App Attest is supported, setting up UI...")
+        // Setup UI only - no heavy work on appear
         setupUI()
     }
     

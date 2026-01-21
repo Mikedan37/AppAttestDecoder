@@ -1,5 +1,11 @@
 # App Attest Verification Guide
 
+**This is the authoritative guide for backend verification responsibilities.**  
+This document defines what must be verified server-side beyond decoding. The decoder provides inspection; this guide defines verification.
+
+**Scope:** Backend/server-side verification requirements.  
+**Status:** Authoritative for verification scope and requirements.
+
 This document explains what verification steps are required beyond decoding. The decoder provides the **inspection layer**; you build the **verification layer** on top.
 
 ## Quick Reference

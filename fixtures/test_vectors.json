@@ -1,0 +1,44 @@
+{
+  "description": "Golden test vectors for App Attest inspection",
+  "testVectors": [
+    {
+      "name": "Normal Assertion",
+      "description": "Standard assertion with 37-byte authenticatorData (minimal assertion shape)",
+      "type": "assertion",
+      "expectedLength": 37,
+      "expectedFlags": "0x40",
+      "note": "This is the minimal assertion structure: rpIdHash(32) + flags(1) + signCount(4)"
+    },
+    {
+      "name": "AT Flag Inconsistent Assertion",
+      "description": "Assertion with AT flag set but no attestedCredentialData payload (37 bytes)",
+      "type": "assertion",
+      "expectedLength": 37,
+      "expectedFlags": "0x40",
+      "expectedWarning": "AT flag set but attested credential data not present",
+      "note": "This tests the flag vs length sanity check. Length is authoritative."
+    },
+    {
+      "name": "Missing clientDataHash",
+      "description": "Assertion without clientDataHash context",
+      "type": "assertion",
+      "missingContext": ["clientDataHash"],
+      "note": "Virtual COSE payload will be incomplete without clientDataHash"
+    },
+    {
+      "name": "Missing Public Key",
+      "description": "Assertion without publicKey context",
+      "type": "assertion",
+      "missingContext": ["publicKey"],
+      "note": "Signature verification impossible without publicKey"
+    },
+    {
+      "name": "Complete Context",
+      "description": "Assertion with all required context (keyID, clientDataHash, publicKey)",
+      "type": "assertion",
+      "hasContext": true,
+      "note": "Full virtual COSE reconstruction possible"
+    }
+  ],
+  "usage": "These are reference cases for testing inspection behavior. Actual test vectors would contain Base64-encoded assertion objects."
+}

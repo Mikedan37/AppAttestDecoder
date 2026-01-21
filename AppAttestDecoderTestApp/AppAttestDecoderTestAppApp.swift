@@ -2,6 +2,7 @@
 //  AppAttestDecoderTestAppApp.swift
 //  AppAttestDecoderTestApp
 //
+//  Reference frontend only. Not a production client. Intentionally verbose, forensic, non-optimized.
 //  Created by Michael Danylchuk on 1/11/26.
 //
 

@@ -1,9 +1,12 @@
 # App Attest Decoder CLI
 
+**This is a structural inspection tool for App Attest artifacts, not a security decision engine.**
+
 A Swift library and CLI for inspecting Apple App Attest attestation and assertion artifacts.
 
-Decoder-only: parses CBOR, ASN.1, COSE, and X.509 into semantic, forensic, diffable, and JSON representations.  
-Performs no cryptographic verification, validation, or execution-context interpretation.
+> ⚠️ **Decoder-only.** No verification. No trust decisions.
+
+Parses CBOR, ASN.1, COSE, and X.509 into semantic, forensic, diffable, and JSON representations. Performs no cryptographic verification, validation, or execution-context interpretation.
 
 ## When to Use This
 
@@ -45,7 +48,7 @@ pretty --forensic --file /path/to/attestation.b64
 # Semantic view (default, human-readable)
 pretty --file /path/to/attestation.b64
 
-# Forensic view (evidence-preserving) - RECOMMENDED
+# Forensic view (evidence-preserving) - RECOMMENDED for audit workflows
 pretty --forensic --file /path/to/attestation.b64
 
 # Lossless tree (complete dump)
@@ -61,7 +64,7 @@ pretty --json --file /path/to/attestation.b64 > attestation.json
 
 - **0** - Decoded successfully
 - **1** - Input malformed (invalid base64, missing file, etc.)
-- **2** - Structurally valid but partial decode (reserved)
+- **2** - Structurally valid but partial decode (e.g. unknown or future COSE/X.509 structure)
 - **3** - Internal error
 
 ### Input Methods
@@ -77,7 +80,7 @@ pretty --base64 "o2NmbXRvYXBwbGUtYXBwYXR0ZXN0..."
 cat attestation.b64 | pretty
 ```
 
-**Note:** The CLI must be run from Xcode (via scheme arguments) due to framework rpath requirements. See `docs/SCHEME_ARGUMENTS.md` for setup.
+**Note:** The CLI currently requires Xcode execution (via scheme arguments) due to dynamic framework rpath constraints. See `docs/SCHEME_ARGUMENTS.md` for setup.
 
 ## Library Usage (Swift)
 
@@ -105,13 +108,19 @@ Device → Attestation Artifact → [ THIS TOOL ] → Parsed Evidence → Your V
 - **Inspection** (this tool): Structural parsing, field extraction, evidence preservation
 - **Verification** (your code): Cryptographic validation, certificate chain validation, policy enforcement
 
+## iOS reference app (AppAttestDecoderTestApp)
+
+The in-repo iOS target is a **reference frontend only**—not a production client. It is intentionally verbose, forensic, and non-optimized for clarity and debugging.
+
+Flow, protocol, bindings, and ownership: **docs/APP_ATTEST_E2E_CONTRACT.md** (source of truth; this README does not restate them).
+
 ## Examples
 
 - **End-to-End Workflow:** `examples/end_to_end_inspection_workflow/` - Complete flow from generation to validator handoff
 - **Single Attestation:** `examples/single_attestation/` - Inspect one attestation using all output modes
 - **Multiple Attestations:** `examples/multiple_attestations/` - Store and index attestations for lifecycle tracking
 - **Diffing:** `examples/diffing/` - Compare attestations and interpret differences
-- **iOS Test App:** `examples/ios_test_app/` - On-device inspection integration (debugging only)
+- **On-device inspection (example):** `examples/ios_test_app/` — decoder integration pattern (debugging only). Distinct from the in-repo iOS reference app above.
 - **CI Pipeline:** `examples/ci_pipeline/` - Safe CI integration patterns
 - **Different Artifacts:** `examples/app_vs_extension_attestation/` - Compare attestations generated under different conditions
 
@@ -142,6 +151,10 @@ The decoder is for **inspection only**. Implement a separate validator for secur
 - **Complete CLI Reference:** `docs/COMMAND_REFERENCE.md`
 - **Server-Side Verification:** `docs/VERIFICATION_GUIDE.md`
 - **Design Philosophy:** `docs/DESIGN_PHILOSOPHY.md` - Tradeoffs and non-goals
+- **E2E Contract (test app + backend):** `docs/APP_ATTEST_E2E_CONTRACT.md` — **source of truth** for flow, bindings, request/response
+- **Frontend Responsibility Contract:** `docs/ios_test_app/FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md` — frontend boundaries and invariants
+- **SIX_VALUES Procedure:** `docs/SIX_VALUES_PROCEDURE.md` - Compare frontend vs backend when verify fails
+- **iOS Test App Documentation:** `docs/ios_test_app/` — setup guides, contracts, and troubleshooting for the test app
 
 ## Requirements
 
@@ -179,6 +192,10 @@ See `docs/PROJECT_STATUS.md` for complete test coverage details.
 
 **Apple-private fields:** No guarantees. Undocumented fields are explicitly unstable and may change at any time.
 
+## Protocol Edge Cases
+
+**Flag Inconsistencies**: In some App Attest assertions, the AT (attested credential data) flag may be set even though no attested credential data is present in the authenticatorData structure. This inspector treats authenticatorData length as authoritative and reports flag inconsistencies when they occur. Flags are advisory; structure is authoritative.
+
 ## Common Misinterpretations
 
 **"Opaque ≠ invalid"** - Opaque means the decoder cannot interpret the structure, not that it's broken. Apple-signed receipts are valid even if their payload is not decodable.
@@ -197,4 +214,6 @@ See `LICENSE` file.
 
 ---
 
-**Status:** Stable for production inspection workflows. See `docs/PROJECT_STATUS.md` for complete assessment.
+**Status:** Stable for inspection and analysis workflows. See `docs/PROJECT_STATUS.md` for complete assessment.
+
+**⚠️ Important:** "Stable" refers to API stability and parsing correctness, not security guarantees. This tool performs inspection only and must not be used to make authorization decisions.

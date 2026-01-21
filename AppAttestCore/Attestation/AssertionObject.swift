@@ -73,15 +73,18 @@ public enum AssertionError: Error, CustomStringConvertible {
     case missingPayload
     case invalidStructure
     case invalidAuthenticatorData
+    case invalidInput(reason: String)
     
     public var description: String {
         switch self {
         case .missingPayload:
             return "Assertion COSE_Sign1 payload is missing or null"
         case .invalidStructure:
-            return "Invalid assertion structure: expected COSE_Sign1 format"
+            return "Invalid assertion structure: expected COSE_Sign1 or Apple map format"
         case .invalidAuthenticatorData:
             return "Invalid authenticator data in assertion payload"
+        case .invalidInput(let reason):
+            return "Invalid input: \(reason)"
         }
     }
 }

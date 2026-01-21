@@ -57,8 +57,24 @@ public struct AuthenticatorData {
         }
 
         // attested credential data (if present)
+        // For assertions, this flag is typically NOT set (assertions don't include attested credential data)
+        // Only attestations include this data
         if flags.attestedCredentialData {
-            self.attestedCredentialData = try AttestedCredentialData(from: rawData, cursor: &cursor)
+            // Check if we have enough data remaining before attempting to read
+            let remainingBytes = rawData.count - cursor
+            if remainingBytes > 0 {
+                // Try to read attested credential data, but handle gracefully if data is incomplete
+                do {
+                    self.attestedCredentialData = try AttestedCredentialData(from: rawData, cursor: &cursor)
+                } catch {
+                    // If reading fails (e.g., incomplete data), set to nil
+                    // This can happen with malformed or truncated authenticatorData
+                    self.attestedCredentialData = nil
+                }
+            } else {
+                // Flag is set but no data remains - this is invalid, but don't crash
+                self.attestedCredentialData = nil
+            }
         } else {
             self.attestedCredentialData = nil
         }
@@ -105,26 +121,52 @@ public struct AttestedCredentialData {
 
     public init(from data: Data, cursor: inout Int) throws {
 
-        func read(_ length: Int) -> Data {
-            precondition(cursor + length <= data.count, "AttestedCredentialData: out-of-bounds read")
+        func read(_ length: Int) throws -> Data {
+            guard cursor + length <= data.count else {
+                throw AuthenticatorDataError.insufficientData(
+                    requested: length,
+                    available: data.count - cursor,
+                    atOffset: cursor
+                )
+            }
             defer { cursor += length }
             return data.subdata(in: cursor ..< cursor + length)
         }
 
         // AAGUID (16 bytes)
-        self.aaguid = read(16)
+        self.aaguid = try read(16)
 
         // Credential ID length (2 bytes, big endian)
-        let idLenData = read(2)
+        let idLenData = try read(2)
         let idLength = idLenData.withUnsafeBytes {
             $0.load(as: UInt16.self).bigEndian
         }
 
         // Credential ID
-        self.credentialId = read(Int(idLength))
+        self.credentialId = try read(Int(idLength))
 
         // Credential public key (CBOR map)
+        guard cursor < data.count else {
+            throw AuthenticatorDataError.insufficientData(
+                requested: 1,
+                available: 0,
+                atOffset: cursor
+            )
+        }
         let remaining = data.suffix(from: cursor)
         self.credentialPublicKey = try CBORDecoder.decode(remaining)
+    }
+}
+
+// MARK: - Errors
+
+public enum AuthenticatorDataError: Error, CustomStringConvertible {
+    case insufficientData(requested: Int, available: Int, atOffset: Int)
+    
+    public var description: String {
+        switch self {
+        case .insufficientData(let requested, let available, let offset):
+            return "AuthenticatorData: insufficient data at offset \(offset) - requested \(requested) bytes, but only \(available) available"
+        }
     }
 }

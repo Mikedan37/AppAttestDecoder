@@ -34,6 +34,8 @@ All examples assume you have:
 **These examples demonstrate inspection and analysis only.**
 **They must not be used to accept or reject requests in production.**
 
+**These examples are for inspection and debugging only. They demonstrate parsing workflows, not authorization patterns.**
+
 All verification must be implemented separately on your server using the raw materials exposed by the decoder.
 
 ## Example Scripts
