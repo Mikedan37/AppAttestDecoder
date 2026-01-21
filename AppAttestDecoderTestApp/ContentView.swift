@@ -315,7 +315,9 @@ struct ContentView: View {
 
         request.httpBody = jsonData
 
+        #if DEBUG
         print("[ContentView] REGISTER.challenge_base64=\(challenge_base64)")
+        #endif
         print("[ContentView] REGISTER.challenge_sha256_hex=\(sha256Hex(ctx.challenge))")
         print("[ContentView] REGISTER.clientDataHash_sha256_hex=\(sha256Hex(ctx.clientDataHash))")
 

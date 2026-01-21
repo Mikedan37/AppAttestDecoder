@@ -130,6 +130,6 @@ The frontend maintains:
 
 ## Related Documentation
 
-- **`ROLE_OF_FRONTEND.md`** - What the frontend does and never does
+- **`GUIDE.md`** - Complete guide to understanding and using the test app
 - **`../APP_ATTEST_E2E_CONTRACT.md`** - End-to-end protocol contract
 - **`FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md`** - Detailed frontend contract

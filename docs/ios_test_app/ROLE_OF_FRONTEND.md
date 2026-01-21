@@ -96,7 +96,8 @@ The frontend does **not** help you make security decisions. All security decisio
 
 ## Related Documentation
 
+- **`GUIDE.md`** - Complete guide (includes this content in Chapters 1-2)
 - **`FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md`** - Detailed contract and invariants
-- **`DATA_FLOW.md`** - What data is produced and sent
+- **`DATA_FLOW.md`** - Detailed data flow documentation
 - **`../APP_ATTEST_E2E_CONTRACT.md`** - End-to-end protocol contract
 - **`../VERIFICATION_GUIDE.md`** - Backend verification responsibilities

@@ -343,7 +343,7 @@ Backend Response
 
 ## Related Documentation
 
-- **`ROLE_OF_FRONTEND.md`** - What the frontend does and never does
-- **`DATA_FLOW.md`** - What data flows through the app
+- **`GUIDE.md`** - Complete guide (includes these examples in Chapter 5)
+- **`DATA_FLOW.md`** - Detailed data flow documentation
 - **`FRONTEND_NON_AUTHORITY_TEST.md`** - Test checklist for non-authority
 - **`WHAT_THIS_TEST_APP_MEASURES.md`** - What can be observed vs cannot prove

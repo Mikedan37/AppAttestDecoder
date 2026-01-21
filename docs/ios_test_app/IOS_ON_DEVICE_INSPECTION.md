@@ -4,8 +4,6 @@
 
 Your iOS test app can generate an App Attest attestation and immediately inspect it using the decoder. This is safe, correct, and does not weaken Apple's security model.
 
-**See also:** `docs/INSPECTOR_PROMPT.md` for a copy-pasteable prompt to implement this in other projects.
-
 ## Architecture: What Runs Where
 
 ### On-Device (iOS App)

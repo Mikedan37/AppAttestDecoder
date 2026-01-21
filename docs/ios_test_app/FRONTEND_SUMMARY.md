@@ -116,7 +116,7 @@ Throughout the codebase, these phrases are used consistently:
 
 ## Examples
 
-See `EXAMPLES.md` for concrete examples showing:
+See `GUIDE.md` Chapter 5 for concrete examples showing:
 - Successful flow with complete data trace
 - Backend rejection with no frontend blocking
 - Repeated submission with no frontend replay protection
@@ -125,8 +125,6 @@ See `EXAMPLES.md` for concrete examples showing:
 
 ## Related Documentation
 
-- **`ROLE_OF_FRONTEND.md`** - Detailed explanation of frontend role
-- **`EXAMPLES.md`** - Concrete flow examples
-- **`FRONTEND_NON_AUTHORITY_TEST.md`** - Test checklist
-- **`WHAT_THIS_TEST_APP_MEASURES.md`** - Measurement vs security
+- **`GUIDE.md`** - Complete guide to understanding and using the test app
 - **`FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md`** - Detailed contract
+- **`FRONTEND_NON_AUTHORITY_TEST.md`** - Test checklist

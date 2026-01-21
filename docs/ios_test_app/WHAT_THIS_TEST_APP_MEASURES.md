@@ -124,7 +124,7 @@ This document describes what the test app can observe and what it cannot prove.
 
 ## Related Documentation
 
-- **`ROLE_OF_FRONTEND.md`** - What the frontend does and never does
+- **`GUIDE.md`** - Complete guide to understanding and using the test app
 - **`FRONTEND_NON_AUTHORITY_TEST.md`** - Test checklist for non-authority
-- **`DATA_FLOW.md`** - What data flows through the app
+- **`DATA_FLOW.md`** - Detailed data flow documentation
 - **`../VERIFICATION_GUIDE.md`** - Backend verification responsibilities
