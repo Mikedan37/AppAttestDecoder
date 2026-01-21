@@ -1040,7 +1040,7 @@ struct ContentView: View {
         let bundleID = Bundle.main.bundleIdentifier ?? "nil"
         print("[ContentView]   Bundle ID (backend expects): \(bundleID)")
         if bundleID != "DanylchukStudios.AppAttestDecoderTestApp" {
-            print("[ContentView]   ⚠ WARNING: Bundle ID mismatch - backend may reject based on policy")
+            print("[ContentView]   WARNING: Bundle ID mismatch - backend may reject based on policy")
         }
         
         // STEP 1: FREEZE THE INPUTS - Log and freeze before generateAssertion
@@ -2521,7 +2521,7 @@ extension ContentView {
         let bundleID = Bundle.main.bundleIdentifier ?? "nil"
         print("[ContentView]   Bundle ID (backend expects): \(bundleID)")
         if bundleID != "DanylchukStudios.AppAttestDecoderTestApp" {
-            print("[ContentView]   ⚠ WARNING: Bundle ID mismatch - backend may reject based on policy")
+            print("[ContentView]   WARNING: Bundle ID mismatch - backend may reject based on policy")
         }
         
         // STEP 1: FREEZE THE INPUTS - Log and freeze before generateAssertion. Never re-encode, hash, or regenerate clientDataHash.

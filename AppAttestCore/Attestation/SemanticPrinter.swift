@@ -429,7 +429,7 @@ public class SemanticPrinter {
                 case .asn1(let desc): output += indent("  payload: \(desc)", level: 1)
                 case .cbor(let desc): output += indent("  payload: \(desc)", level: 1)
                 case .plist(let desc): output += indent("  payload: \(desc)", level: 1)
-                case .opaque(let desc): output += indent("  payload: ◻ \(desc)", level: 1)
+                case .opaque(let desc): output += indent("  payload: [opaque] \(desc)", level: 1)
                 }
             }
         case .cbor(let cbor):
@@ -442,7 +442,7 @@ public class SemanticPrinter {
         case .plist(let plist):
             output += indent("  format: \(plist.format)", level: 1)
         case .opaque(let reason):
-            output += indent("  status: ◻ Opaque", level: 1)
+            output += indent("  status: [opaque] Opaque", level: 1)
             output += indent("  reason: \(reason)", level: 1)
         }
         

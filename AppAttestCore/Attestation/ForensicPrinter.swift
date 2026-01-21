@@ -428,7 +428,7 @@ extension AttestationObject {
             attStmtContent += transcript.twoColumnField(key: "ALGORITHM", value: "\(alg) (ES256, COSE alg -7)")
             attStmtContent += transcript.twoColumnField(key: "  Note", value: "Explicitly specified in attStmt map")
         } else {
-            attStmtContent += transcript.twoColumnField(key: "ALGORITHM", value: "◻ Implicit (not present in attStmt)")
+            attStmtContent += transcript.twoColumnField(key: "ALGORITHM", value: "[implicit] Implicit (not present in attStmt)")
             attStmtContent += transcript.twoColumnField(key: "  Reason", value: "Apple App Attest uses certificate-based attestation")
             attStmtContent += transcript.twoColumnField(key: "  Implied", value: "ES256 (from certificate signature algorithm)")
         }
@@ -674,7 +674,7 @@ extension AttestationObject {
                         receiptContent += transcript.twoColumnField(key: "  Structure", value: "Property List (plist)")
                     }
                     else {
-                        receiptContent += transcript.twoColumnField(key: "  Structure", value: "◻ Opaque (unknown format)")
+                        receiptContent += transcript.twoColumnField(key: "  Structure", value: "[opaque] Opaque (unknown format)")
                     }
                     
                     receiptContent += transcript.twoColumnField(key: "  Note", value: "Apple-signed evidence blob, signature not verified here")
@@ -729,7 +729,7 @@ extension AttestationObject {
                     receiptContent += transcript.twoColumnField(key: "  Detected", value: "UTF-8 String (preview: \(String(str.prefix(50))))")
                 }
                 else {
-                    receiptContent += transcript.twoColumnField(key: "  Detected", value: "◻ Opaque (no recognizable structure)")
+                    receiptContent += transcript.twoColumnField(key: "  Detected", value: "[opaque] Opaque (no recognizable structure)")
                 }
                 
                 receiptContent += transcript.twoColumnField(key: "NOTE", value: "Receipt present but structure not decodable as CMS/PKCS#7")
