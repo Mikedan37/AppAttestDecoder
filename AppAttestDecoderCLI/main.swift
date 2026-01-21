@@ -705,7 +705,7 @@ func handleValidateCommand(args: [String]) {
     
     // Create P256 public key
     guard let publicKey = try? P256.Signing.PublicKey(x963Representation: publicKeyData) else {
-        printError("❌ Verification failed: invalid public key format")
+        printError("ERROR: Verification failed: invalid public key format")
         printError("  Expected: 65-byte uncompressed P-256 public key (0x04 || x || y)")
         printError("  Received: \(publicKeyData.count) bytes")
         exit(ExitCode.malformedInput.rawValue)
@@ -713,13 +713,13 @@ func handleValidateCommand(args: [String]) {
     
     // Parse ASN.1 DER signature
     guard let (r, s) = parseASN1DERSignature(signatureData) else {
-        printError("❌ Verification failed: invalid ASN.1 DER signature format")
+        printError("ERROR: Verification failed: invalid ASN.1 DER signature format")
         exit(ExitCode.malformedInput.rawValue)
     }
     
     // Create ECDSA signature
     guard let ecdsaSignature = try? P256.Signing.ECDSASignature(rawRepresentation: r + s) else {
-        printError("❌ Verification failed: invalid ECDSA signature")
+        printError("ERROR: Verification failed: invalid ECDSA signature")
         exit(ExitCode.malformedInput.rawValue)
     }
     
@@ -727,11 +727,11 @@ func handleValidateCommand(args: [String]) {
     let isValid = publicKey.isValidSignature(ecdsaSignature, for: Data(sigStructureHash))
     
     if isValid {
-        print("✅ Signature verified (ECDSA P-256 over SHA256)")
+        print("Signature verified (ECDSA P-256 over SHA256)")
         print("  Sig_structure hash: \(Data(sigStructureHash).map { String(format: "%02x", $0) }.joined(separator: ""))")
         exit(ExitCode.success.rawValue)
     } else {
-        printError("❌ Verification failed: invalid signature")
+        printError("ERROR: Verification failed: invalid signature")
         printError("  Sig_structure hash: \(Data(sigStructureHash).map { String(format: "%02x", $0) }.joined(separator: ""))")
         printError("  Possible causes:")
         printError("    - Wrong public key")

@@ -1,7 +1,7 @@
 # Frontend App Attest Violations and Required Fixes
 
 **Date:** 2026-01-20  
-**Status:** ✅ All Fixes Applied  
+**Status:**  All Fixes Applied  
 **Scope:** iOS Test App (`AppAttestDecoderTestApp`)
 
 > **Reference:** Violations are defined relative to `FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md` (authoritative).
@@ -14,7 +14,7 @@ The frontend implementation is **mostly correct** but contains **3 violations** 
 
 ## Violations Found
 
-### 🔴 Violation 1: Security State Inference in Error Messages
+### Violation 1: Security State Inference in Error Messages
 
 **File:** `ContentView.swift`  
 **Lines:** 984-996, 1010, 209
@@ -27,10 +27,10 @@ The frontend implementation is **mostly correct** but contains **3 violations** 
 backendError = "keyID mismatch – assertion will not verify"
 
 // Line 1010
-print("[ContentView]   ✗ WARNING: Bundle ID mismatch - assertion will NOT verify!")
+print("[ContentView]    WARNING: Bundle ID mismatch - assertion will NOT verify!")
 
 // Line 209
-print("[ContentView] ✗ App Attest signatures will NOT verify if backend uses different bundle ID")
+print("[ContentView]  App Attest signatures will NOT verify if backend uses different bundle ID")
 ```
 
 **Problem:** The frontend is inferring cryptographic verification outcomes, which violates the contract. The frontend should only report state inconsistencies or potential backend policy rejections.
@@ -39,7 +39,7 @@ print("[ContentView] ✗ App Attest signatures will NOT verify if backend uses d
 
 ---
 
-### 🟡 Violation 2: Response Status Interpretation
+### Violation 2: Response Status Interpretation
 
 **File:** `ContentView.swift`  
 **Lines:** 1415-1426
@@ -63,7 +63,7 @@ if status == "verified" || status == "accepted" {
 
 ---
 
-### ✅ Acceptable: State Consistency Checks
+###  Acceptable: State Consistency Checks
 
 **File:** `ContentView.swift`  
 **Lines:** 984-996, 1294-1318
@@ -111,12 +111,12 @@ guard let registeredKeyID = registeredKeyID, registeredKeyID == keyID else {
 ```swift
 // BEFORE:
 if bundleID != "DanylchukStudios.AppAttestDecoderTestApp" {
-    print("[ContentView]   ✗ WARNING: Bundle ID mismatch - assertion will NOT verify!")
+    print("[ContentView]    WARNING: Bundle ID mismatch - assertion will NOT verify!")
 }
 
 // AFTER:
 if bundleID != "DanylchukStudios.AppAttestDecoderTestApp" {
-    print("[ContentView]   ⚠ WARNING: Bundle ID mismatch - backend may reject based on policy")
+    print("[ContentView] WARNING: Bundle ID mismatch - backend may reject based on policy")
 }
 ```
 
@@ -124,10 +124,10 @@ if bundleID != "DanylchukStudios.AppAttestDecoderTestApp" {
 
 ```swift
 // BEFORE:
-print("[ContentView] ✗ App Attest signatures will NOT verify if backend uses different bundle ID")
+print("[ContentView]  App Attest signatures will NOT verify if backend uses different bundle ID")
 
 // AFTER:
-print("[ContentView] ⚠ Bundle ID mismatch - backend may reject based on policy")
+print("[ContentView] WARNING: Bundle ID mismatch - backend may reject based on policy")
 ```
 
 ### Change 2: Fix Response Status Language

@@ -28,7 +28,7 @@ The UI enforces this exact sequence. Users cannot skip steps:
 
 ### Step 3: Register Attestation
 - Tap "Register Attestation" button
-- **Expected**: Button changes to "Registered ✓" and becomes disabled
+- **Expected**: Button changes to "Registered (flowID received)" and becomes disabled
 - **Logs**:
   - `[ContentView] REGISTER - keyID: <base64>`
   - `[ContentView] REGISTER response status: 200`
@@ -114,10 +114,10 @@ After a successful verify, compare frontend and backend logs:
 
 | Fingerprint | Frontend Value | Backend Value | Match? |
 |-------------|----------------|---------------|--------|
-| `keyID_sha256` | `<hash>` | `<hash>` | ✓ |
-| `clientDataHash_sha256` | `<hash>` | `<hash>` | ✓ |
-| `assertionObject_sha256` | `<hash>` | `<hash>` | ✓ |
-| `signedBytes_sha256` | `<hash>` | `<hash>` | ✓ |
+| `keyID_sha256` | `<hash>` | `<hash>` | MATCH |
+| `clientDataHash_sha256` | `<hash>` | `<hash>` | MATCH |
+| `assertionObject_sha256` | `<hash>` | `<hash>` | MATCH |
+| `signedBytes_sha256` | `<hash>` | `<hash>` | MATCH |
 
 **If all match and verify fails**: Bug is in key registration or signature API usage  
 **If any mismatch**: Bug is in transport/encoding/hash handling
@@ -128,7 +128,7 @@ After a successful verify, compare frontend and backend logs:
 - **"Register Attestation"**:
   - Enabled when: attestation exists, not already registered, not in-flight
   - Disabled when: `isRegistering || isSendingToBackend || isRequestingClientDataHash || registrationSucceeded`
-  - Shows: "Registering..." during request, "Registered ✓" after success
+  - Shows: "Registering..." during request, "Registered (flowID received)" after success
 
 - **"Verify Assertion"**:
   - Enabled when: `registrationSucceeded && keyID exists && attestation exists && not in-flight`

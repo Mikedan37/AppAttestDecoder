@@ -89,11 +89,11 @@ class ActionViewController: SLComposeServiceViewController {
             print("[ActionExtension]   2. Extension signed with wrong team/profile")
             print("[ActionExtension]   3. Provisioning profile doesn't include entitlement")
             showError("App Attest not supported in this context.\n\nCheck:\n1. Extension has App Attest capability\n2. Extension signed with correct team\n3. Clean build and reinstall")
-            updateStatus("❌ App Attest not supported")
+            updateStatus("ERROR: App Attest not supported")
             return
         }
         
-        print("[ActionExtension] ✅ App Attest is supported, starting flow...")
+        print("[ActionExtension] App Attest is supported, starting flow...")
         updateStatus("Initializing...")
         
         // Auto-run full flow with a slight delay to ensure everything is ready
@@ -275,7 +275,7 @@ class ActionViewController: SLComposeServiceViewController {
         guard service.isSupported else {
             print("[ActionExtension] ERROR: isSupported became false during flow")
             showError("App Attest support lost during execution")
-            updateStatus("❌ Support check failed")
+            updateStatus("ERROR: Support check failed")
             return
         }
         
@@ -292,14 +292,14 @@ class ActionViewController: SLComposeServiceViewController {
                 if let error = error {
                     print("[ActionExtension] GenerateKey error: \(error)")
                     self.showError("Failed to generate key: \(error.localizedDescription)")
-                    self.updateStatus("❌ Key generation failed")
+                    self.updateStatus("ERROR: Key generation failed")
                     return
                 }
                 
                 guard let keyID = keyID else {
                     print("[ActionExtension] GenerateKey returned nil")
                     self.showError("Key generation returned nil")
-                    self.updateStatus("❌ Key generation returned nil")
+                    self.updateStatus("ERROR: Key generation returned nil")
                     return
                 }
                 
@@ -321,14 +321,14 @@ class ActionViewController: SLComposeServiceViewController {
                         if let error = error {
                             print("[ActionExtension] AttestKey error: \(error)")
                             self.showError("Failed to attest key: \(error.localizedDescription)")
-                            self.updateStatus("❌ Attestation failed")
+                            self.updateStatus("ERROR: Attestation failed")
                             return
                         }
                         
                         guard let attestBlob = attestBlob else {
                             print("[ActionExtension] AttestKey returned nil")
                             self.showError("Attestation returned nil")
-                            self.updateStatus("❌ Attestation returned nil")
+                            self.updateStatus("ERROR: Attestation returned nil")
                             return
                         }
                         
@@ -350,14 +350,14 @@ class ActionViewController: SLComposeServiceViewController {
                                 if let error = error {
                                     print("[ActionExtension] GenerateAssertion error: \(error)")
                                     self.showError("Failed to generate assertion: \(error.localizedDescription)")
-                                    self.updateStatus("❌ Assertion failed")
+                                    self.updateStatus("ERROR: Assertion failed")
                                     return
                                 }
                                 
                                 guard let assertionObject = assertionObject else {
                                     print("[ActionExtension] GenerateAssertion returned nil")
                                     self.showError("Assertion returned nil")
-                                    self.updateStatus("❌ Assertion returned nil")
+                                    self.updateStatus("ERROR: Assertion returned nil")
                                     return
                                 }
                                 
@@ -374,7 +374,7 @@ class ActionViewController: SLComposeServiceViewController {
                                     assertClientDataHash: assertClientDataHash
                                 )
                                 
-                                self.updateStatus("✅ Complete! All artifacts generated.")
+                                self.updateStatus("Complete! All artifacts generated.")
                             }
                         }
                     }
@@ -408,7 +408,7 @@ class ActionViewController: SLComposeServiceViewController {
     private func showError(_ message: String) {
         errorLabel.text = message
         errorLabel.isHidden = false
-        updateStatus("❌ Error occurred")
+        updateStatus("ERROR: Error occurred")
         print("[ActionExtension] ERROR: \(message)")
     }
     

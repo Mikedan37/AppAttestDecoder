@@ -399,7 +399,7 @@ struct AssertionInspectorView: View {
             output += "    flag: \(parsed.hasATFlag ? "set (0x40)" : "not set")\n"
             output += "    payload: \(parsed.hasATPayload ? "present" : "absent")\n"
             if parsed.hasATFlag && !parsed.hasATPayload {
-                output += "    ⚠️ status: inconsistent (flag set but no payload; treating as not present)\n"
+                output += "    WARNING: status: inconsistent (flag set but no payload; treating as not present)\n"
             } else {
                 output += "    status: \(parsed.attestedCredentialDataPresent ? "present" : "not present")\n"
             }
@@ -408,7 +408,7 @@ struct AssertionInspectorView: View {
             output += "    flag: \(parsed.hasEDFlag ? "set (0x80)" : "not set")\n"
             output += "    payload: \(parsed.hasEDPayload ? "present" : "absent")\n"
             if parsed.hasEDFlag && !parsed.hasEDPayload {
-                output += "    ⚠️ status: inconsistent (flag set but no payload; treating as not present)\n"
+                output += "    WARNING: status: inconsistent (flag set but no payload; treating as not present)\n"
             } else {
                 output += "    status: \(parsed.extensionsPresent ? "present" : "not present")\n"
             }
@@ -438,12 +438,12 @@ struct AssertionInspectorView: View {
         output += "-------------\n"
         switch result.decodeStatus {
         case .success:
-            output += "✅ Assertion object decoded successfully\n"
+            output += "Assertion object decoded successfully\n"
             if let parsed = result.parsedAuthData {
-                output += "   - AuthenticatorData: ✅ Parsed (\(parsed.rawBytes.count) bytes)\n"
+                output += "   - AuthenticatorData: Parsed (\(parsed.rawBytes.count) bytes)\n"
             }
             if let sig = result.signatureBytes {
-                output += "   - Signature: ✅ Extracted (\(sig.count) bytes)\n"
+                output += "   - Signature: Extracted (\(sig.count) bytes)\n"
             }
             output += "\n"
             output += "Note: This object does not contain a COSE envelope by design.\n"
@@ -451,9 +451,9 @@ struct AssertionInspectorView: View {
             output += "  • clientDataHash (from server challenge)\n"
             output += "  • public key (from attestation certificate)\n"
         case .partial(let reason):
-            output += "⚠️ Partial decode: \(reason)\n"
+            output += "WARNING: Partial decode: \(reason)\n"
         case .failed(let error):
-            output += "❌ Decode failed: \(error)\n"
+            output += "ERROR: Decode failed: \(error)\n"
         }
         
         // Add virtual COSE envelope section if available
@@ -533,11 +533,11 @@ struct AssertionInspectorView: View {
         
         switch result.decodeStatus {
         case .success:
-            output += "Decode status: ✅ Full decode successful\n"
+            output += "Decode status: Full decode successful\n"
         case .partial(let reason):
-            output += "Decode status: ⚠️ Partial decode: \(reason)\n"
+            output += "Decode status: WARNING: Partial decode: \(reason)\n"
         case .failed(let error):
-            output += "Decode status: ❌ Decode failed: \(error)\n"
+            output += "Decode status: ERROR: Decode failed: \(error)\n"
         }
         
         if !result.missingContext.isEmpty {
@@ -573,7 +573,7 @@ struct AssertionInspectorView: View {
                 // Show warnings if any
                 if !parsed.warnings.isEmpty {
                     for warning in parsed.warnings {
-                        output += "  ⚠️ \(warning.message)\n"
+                        output += "  WARNING: \(warning.message)\n"
                     }
                 }
                 
@@ -612,11 +612,11 @@ struct AssertionInspectorView: View {
         
         switch result.decodeStatus {
         case .success:
-            output += "Decode status: ✅ Full decode successful\n"
+            output += "Decode status: Full decode successful\n"
         case .partial(let reason):
-            output += "Decode status: ⚠️ Partial decode: \(reason)\n"
+            output += "Decode status: WARNING: Partial decode: \(reason)\n"
         case .failed(let error):
-            output += "Decode status: ❌ Decode failed: \(error)\n"
+            output += "Decode status: ERROR: Decode failed: \(error)\n"
         }
         output += "\n"
         
@@ -732,7 +732,7 @@ struct AssertionInspectorView: View {
         output += "\(indentStr)    flag: \(parsed.hasATFlag ? "set (0x40)" : "not set")\n"
         output += "\(indentStr)    payload: \(parsed.hasATPayload ? "present" : "absent")\n"
         if parsed.hasATFlag && !parsed.hasATPayload {
-            output += "\(indentStr)    ⚠️ status: inconsistent (flag set but no payload; treating as not present)\n"
+            output += "\(indentStr)    WARNING: status: inconsistent (flag set but no payload; treating as not present)\n"
         } else {
             output += "\(indentStr)    status: \(parsed.attestedCredentialDataPresent ? "present" : "not present")\n"
         }
@@ -741,7 +741,7 @@ struct AssertionInspectorView: View {
         output += "\(indentStr)    flag: \(parsed.hasEDFlag ? "set (0x80)" : "not set")\n"
         output += "\(indentStr)    payload: \(parsed.hasEDPayload ? "present" : "absent")\n"
         if parsed.hasEDFlag && !parsed.hasEDPayload {
-            output += "\(indentStr)    ⚠️ status: inconsistent (flag set but no payload; treating as not present)\n"
+            output += "\(indentStr)    WARNING: status: inconsistent (flag set but no payload; treating as not present)\n"
         } else {
             output += "\(indentStr)    status: \(parsed.extensionsPresent ? "present" : "not present")\n"
         }

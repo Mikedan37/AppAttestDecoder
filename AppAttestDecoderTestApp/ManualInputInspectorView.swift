@@ -257,7 +257,7 @@ struct ManualInputInspectorView: View {
                     // Add warnings based on result
                     if let sig = result.signatureBytes {
                         if sig.count != 64 && sig.count != 70 && sig.count != 72 {
-                            inputWarnings.append("⚠️ Signature length (\(sig.count) bytes) is unusual but may be valid")
+                            inputWarnings.append("WARNING: Signature length (\(sig.count) bytes) is unusual but may be valid")
                         }
                     }
                 }
@@ -305,7 +305,7 @@ struct ManualInputInspectorView: View {
             output += "    flag: \(parsed.hasATFlag ? "set (0x40)" : "not set")\n"
             output += "    payload: \(parsed.hasATPayload ? "present" : "absent")\n"
             if parsed.hasATFlag && !parsed.hasATPayload {
-                output += "    ⚠️ status: inconsistent (flag set but no payload; treating as not present)\n"
+                output += "    WARNING: status: inconsistent (flag set but no payload; treating as not present)\n"
             } else {
                 output += "    status: \(parsed.attestedCredentialDataPresent ? "present" : "not present")\n"
             }
@@ -313,7 +313,7 @@ struct ManualInputInspectorView: View {
             output += "    flag: \(parsed.hasEDFlag ? "set (0x80)" : "not set")\n"
             output += "    payload: \(parsed.hasEDPayload ? "present" : "absent")\n"
             if parsed.hasEDFlag && !parsed.hasEDPayload {
-                output += "    ⚠️ status: inconsistent (flag set but no payload; treating as not present)\n"
+                output += "    WARNING: status: inconsistent (flag set but no payload; treating as not present)\n"
             } else {
                 output += "    status: \(parsed.extensionsPresent ? "present" : "not present")\n"
             }
@@ -339,7 +339,7 @@ struct ManualInputInspectorView: View {
         if !result.warnings.isEmpty {
             output += "\nWarnings:\n"
             for warning in result.warnings {
-                output += "⚠️ \(warning.message)\n"
+                output += "WARNING: \(warning.message)\n"
             }
         }
         
@@ -379,7 +379,7 @@ struct ManualInputInspectorView: View {
                 output += "\nParsed AuthenticatorData:\n"
                 if !parsed.warnings.isEmpty {
                     for warning in parsed.warnings {
-                        output += "  ⚠️ \(warning.message)\n"
+                        output += "  WARNING: \(warning.message)\n"
                     }
                 }
                 output += formatAuthenticatorData(parsed, indent: 2)
@@ -505,7 +505,7 @@ struct ManualInputInspectorView: View {
         output += "\(indentStr)    flag: \(parsed.hasATFlag ? "set (0x40)" : "not set")\n"
         output += "\(indentStr)    payload: \(parsed.hasATPayload ? "present" : "absent")\n"
         if parsed.hasATFlag && !parsed.hasATPayload {
-            output += "\(indentStr)    ⚠️ status: inconsistent (flag set but no payload; treating as not present)\n"
+            output += "\(indentStr)    WARNING: status: inconsistent (flag set but no payload; treating as not present)\n"
         } else {
             output += "\(indentStr)    status: \(parsed.attestedCredentialDataPresent ? "present" : "not present")\n"
         }
@@ -514,7 +514,7 @@ struct ManualInputInspectorView: View {
         output += "\(indentStr)    flag: \(parsed.hasEDFlag ? "set (0x80)" : "not set")\n"
         output += "\(indentStr)    payload: \(parsed.hasEDPayload ? "present" : "absent")\n"
         if parsed.hasEDFlag && !parsed.hasEDPayload {
-            output += "\(indentStr)    ⚠️ status: inconsistent (flag set but no payload; treating as not present)\n"
+            output += "\(indentStr)    WARNING: status: inconsistent (flag set but no payload; treating as not present)\n"
         } else {
             output += "\(indentStr)    status: \(parsed.extensionsPresent ? "present" : "not present")\n"
         }
@@ -595,7 +595,7 @@ struct ManualInputInspectorView: View {
         // Check for Base64URL vs Base64
         if trimmed.contains("-") || trimmed.contains("_") {
             if encoding == .base64 {
-                warnings.append("⚠️ Input contains '-' or '_': This looks like Base64URL, not Base64")
+                warnings.append("WARNING: Input contains '-' or '_': This looks like Base64URL, not Base64")
             }
         }
         
@@ -604,7 +604,7 @@ struct ManualInputInspectorView: View {
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "-", with: "")
         if hexPattern.count % 2 == 0 && hexPattern.allSatisfy({ $0.isHexDigit }) && encoding != .hex {
-            warnings.append("⚠️ Input looks like hex, but encoding is set to \(encoding == .base64 ? "Base64" : "Base64URL")")
+            warnings.append("WARNING: Input looks like hex, but encoding is set to \(encoding == .base64 ? "Base64" : "Base64URL")")
         }
         
         inputWarnings = warnings
