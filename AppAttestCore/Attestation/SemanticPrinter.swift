@@ -159,11 +159,11 @@ public class SemanticPrinter {
         }
         if let x = credential.publicKey.xCoordinate {
             let hexCompact = formatHexCompact(x.hex)
-            output += indent("  x: \(hexCompact) (\(x.length) bytes) 🔒", level: 2)
+            output += indent("  x: \(hexCompact) (\(x.length) bytes) [opaque]", level: 2)
         }
         if let y = credential.publicKey.yCoordinate {
             let hexCompact = formatHexCompact(y.hex)
-            output += indent("  y: \(hexCompact) (\(y.length) bytes) 🔒", level: 2)
+            output += indent("  y: \(hexCompact) (\(y.length) bytes) [opaque]", level: 2)
         }
         
         if !credential.publicKey.unknownParameters.isEmpty {
@@ -195,7 +195,7 @@ public class SemanticPrinter {
             }
         }
         
-        addFootnote("Public key coordinates are cryptographic material. 🔒 indicates opaque data. Use --forensic for full hex.")
+        addFootnote("Public key coordinates are cryptographic material. [opaque] indicates opaque data. Use --forensic for full hex.")
         
         return output
     }

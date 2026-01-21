@@ -91,7 +91,7 @@ class ClientDataContextManager {
         
         if let existing = contexts[keyID] {
             #if DEBUG
-            print("[ClientDataContextManager] ⚠ Reusing existing clientDataHash for keyID: \(keyID)")
+            print("[ClientDataContextManager] WARNING: Reusing existing clientDataHash for keyID: \(keyID)")
             print("[ClientDataContextManager]   This should only happen if Attest Key was pressed again")
             print("[ClientDataContextManager]   clientDataHash (b64): \(existing.clientDataHash.base64EncodedString())")
             #endif
@@ -180,8 +180,8 @@ class AppAttestKeyManager {
         
         if let existing = currentKeyID {
             if existing != keyID {
-                print("[AppAttestKeyManager] ⚠ WARNING: KeyID changed from \(existing) to \(keyID)")
-                print("[AppAttestKeyManager] ⚠ This will cause signature verification to fail!")
+                print("[AppAttestKeyManager] WARNING: KeyID changed from \(existing) to \(keyID)")
+                print("[AppAttestKeyManager] WARNING: This will cause signature verification to fail!")
             }
         }
         currentKeyID = keyID

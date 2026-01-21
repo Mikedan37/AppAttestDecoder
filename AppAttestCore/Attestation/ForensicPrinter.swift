@@ -393,12 +393,12 @@ extension AttestationObject {
                 }
                 if let x = x {
                     let xHex = x.map { String(format: "%02x", $0) }.joined()
-                    credDataContent += transcript.twoColumnField(key: "  x", value: "[\(x.count) bytes] 🔒 (EC x-coordinate)")
+                    credDataContent += transcript.twoColumnField(key: "  x", value: "[\(x.count) bytes] [opaque] (EC x-coordinate)")
                     credDataContent += transcript.twoColumnField(key: "    Hex", value: xHex)
                 }
                 if let y = y {
                     let yHex = y.map { String(format: "%02x", $0) }.joined()
-                    credDataContent += transcript.twoColumnField(key: "  y", value: "[\(y.count) bytes] 🔒 (EC y-coordinate)")
+                    credDataContent += transcript.twoColumnField(key: "  y", value: "[\(y.count) bytes] [opaque] (EC y-coordinate)")
                     credDataContent += transcript.twoColumnField(key: "    Hex", value: yHex)
                 }
                 
@@ -435,14 +435,14 @@ extension AttestationObject {
         
         // Signature - explicit explanation
         if !attestationStatement.signature.isEmpty {
-            attStmtContent += transcript.twoColumnField(key: "SIGNATURE", value: "🔒 Present (\(attestationStatement.signature.count) bytes)")
+            attStmtContent += transcript.twoColumnField(key: "SIGNATURE", value: "[opaque] Present (\(attestationStatement.signature.count) bytes)")
             attStmtContent += transcript.twoColumnField(key: "  Type", value: "ECDSA signature (cryptographic, not interpreted)")
             attStmtContent += transcript.twoColumnField(key: "  Location", value: "attStmt map 'sig' field")
             attStmtContent += transcript.twoColumnField(key: "  Purpose", value: "Signature over authenticatorData || clientDataHash")
             attStmtContent += transcript.twoColumnField(key: "  Verification", value: "Requires validated certificate chain (not performed)")
             attStmtContent += transcript.twoColumnField(key: "  Spec", value: "WebAuthn §8.2 (Apple App Attest format)")
         } else {
-            attStmtContent += transcript.twoColumnField(key: "SIGNATURE", value: "◻ Not present (by design)")
+            attStmtContent += transcript.twoColumnField(key: "SIGNATURE", value: "[not present] Not present (by design)")
             attStmtContent += transcript.twoColumnField(key: "  Reason", value: "Apple App Attest relies on X.509 certificate chain")
             attStmtContent += transcript.twoColumnField(key: "  Trust Model", value: "Certificate trust, not COSE signature")
             attStmtContent += transcript.twoColumnField(key: "  Spec", value: "WebAuthn §8.2 (Apple App Attest format)")
@@ -634,7 +634,7 @@ extension AttestationObject {
                         receiptContent += transcript.twoColumnField(key: "  Signer[\(idx)]", value: "Version \(signer.version)")
                         receiptContent += transcript.twoColumnField(key: "    Digest Alg", value: signer.digestAlgorithm.name)
                         receiptContent += transcript.twoColumnField(key: "    Signature Alg", value: signer.signatureAlgorithmName)
-                        receiptContent += transcript.twoColumnField(key: "    Signature", value: "🔒 \(signer.signature.count) bytes (not verified)")
+                        receiptContent += transcript.twoColumnField(key: "    Signature", value: "[opaque] \(signer.signature.count) bytes (not verified)")
                         
                         switch signer.sid.type {
                         case .issuerAndSerialNumber(let issuer, let serial):

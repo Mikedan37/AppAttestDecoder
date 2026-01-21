@@ -120,7 +120,7 @@ final class AppAttestCoreTests: XCTestCase {
                 To fix this:
                 1. Run AppAttestDecoderTestApp on a real device (iOS 14+)
                 2. Generate a key and tap "Attest Key"
-                3. Tap the copy button (📋) next to the attestation blob
+                3. Tap the copy button next to the attestation blob
                 4. Replace the attestationObjectBase64 value in this test file with the complete string
                 5. Complete attestation objects are typically 1000-2000+ bytes when decoded
                 

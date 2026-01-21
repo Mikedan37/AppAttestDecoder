@@ -46,7 +46,7 @@ This checklist verifies that the frontend implementation is a pure signer and tr
 
 ## Required Frontend Fingerprint Logging
 
-Immediately after assertion generation and before network send, verify these are logged:
+During assertion generation and prior to network send, verify these are logged:
 
 - [ ] `keyID_sha256` (SHA256 of decoded keyID bytes, NOT string)
 - [ ] `clientDataHash_hex` (32-byte hex string)

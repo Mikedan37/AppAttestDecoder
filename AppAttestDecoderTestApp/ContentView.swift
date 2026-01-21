@@ -207,8 +207,8 @@ struct ContentView: View {
         if bundleID == "DanylchukStudios.AppAttestDecoderTestApp" {
             print("[ContentView] Bundle ID matches expected value")
         } else {
-            print("[ContentView] ⚠ WARNING: Bundle ID mismatch!")
-            print("[ContentView] ⚠ Bundle ID mismatch - backend may reject based on policy")
+            print("[ContentView] WARNING: Bundle ID mismatch!")
+            print("[ContentView] Bundle ID mismatch - backend may reject based on policy")
             print("[ContentView] Backend expects bundle ID: \(bundleID)")
         }
         print("[ContentView] ========================================")
@@ -1180,7 +1180,7 @@ struct ContentView: View {
         print("[ContentView] OBSERVATIONAL — NOT VERIFIED. AssertionTrustModel.opaqueAppleAssertion.")
         print("[ContentView] ========================================")
         print("[ContentView] Backend computes signedBytes from RAW BYTES, not hex/base64 strings")
-        print("[ContentView] ⚠ signedBytes = authenticatorData (raw bytes) + clientDataHash (32 raw bytes)")
+        print("[ContentView] signedBytes = authenticatorData (raw bytes) + clientDataHash (32 raw bytes)")
         print("[ContentView] ========================================")
         print("[ContentView] authenticatorData_length: \(authenticatorData.count)")
         print("[ContentView] authenticatorData_hex: \(authenticatorData_hex)")

@@ -274,9 +274,9 @@ struct ForensicTranscriptPrinter {
     // MARK: - Status Symbols
     
     enum StatusSymbol {
-        static let decoded = "✔"
-        static let opaque = "◻"
-        static let warning = "⚠"
-        static let cryptographic = "🔒"
+        static let decoded = "[decoded]"
+        static let opaque = "[opaque]"
+        static let warning = "[WARNING]"
+        static let cryptographic = "[opaque]"
     }
 }
