@@ -2,7 +2,7 @@
 
 **Scope:** iOS Test App (`AppAttestDecoderTestApp`)
 
-This document explains what the frontend does, what it never does, and why this distinction matters.
+This document describes what the frontend does and what it never does.
 
 ---
 
@@ -64,9 +64,7 @@ The frontend **never**:
 
 ---
 
-## Why This Distinction Matters
-
-### Security Boundary
+## Security Boundary
 
 The frontend operates on the **client side** of a security boundary. The backend operates on the **server side** where all cryptographic verification happens.
 
@@ -74,23 +72,16 @@ The frontend operates on the **client side** of a security boundary. The backend
 
 **Backend responsibility:** Verify cryptographic signatures, validate certificate chains, enforce policies, prevent replay attacks.
 
-### Diagnostic vs Production
+## Diagnostic Tool Characteristics
 
-This is a **diagnostic test app**, not a production client. It is:
-- Verbose and forensic (for debugging)
-- Non-optimized (for clarity)
-- Explicitly non-authoritative (for learning)
+This is a **diagnostic test app** that:
+- Provides verbose and forensic output for debugging
+- Shows what data is generated
+- Shows what data is sent
+- Shows backend responses
+- Does not make security decisions
 
-Production frontend implementations should follow similar principles but must be validated independently.
-
-### Learning vs Security
-
-The frontend helps you **learn** how App Attest works by:
-- Showing what data is generated
-- Showing what data is sent
-- Showing backend responses
-
-The frontend does **not** help you make security decisions. All security decisions happen on the backend.
+All security decisions happen on the backend.
 
 ---
 

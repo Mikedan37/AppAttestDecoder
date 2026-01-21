@@ -29,7 +29,6 @@ Read `GUIDE.md` first for a complete understanding of the test app.
 ### Implementation Reference
 
 - **`FRONTEND_INVARIANTS_CHECKLIST.md`** - Checklist of frontend invariants
-- **`FRONTEND_VIOLATIONS_AND_FIXES.md`** - Historical violations and fixes
 - **`DATA_FLOW.md`** - Detailed data flow documentation
 
 ### Setup Guides

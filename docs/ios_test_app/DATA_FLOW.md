@@ -121,7 +121,7 @@ The backend:
 ### Data Integrity
 
 The frontend maintains:
-- Raw bytes are sent unchanged (no modification after App Attest API calls)
+- Raw bytes are sent unchanged (no modification of App Attest API output)
 - Base64 encoding is standard (not URL-safe)
 - JSON keys are sorted (canonical format)
 - State consistency (flowID matches registration, keyID matches attestation)

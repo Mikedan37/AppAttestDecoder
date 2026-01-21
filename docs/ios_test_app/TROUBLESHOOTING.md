@@ -134,7 +134,7 @@ Common issues and solutions for the diagnostic test app.
 
 **Solutions:**
 
-- Ensure "Attest Key" completed before Register
+- Complete "Attest Key" step before attempting Register
 - Check `ClientDataContext` contains challenge
 - Verify challenge is base64-encoded correctly
 

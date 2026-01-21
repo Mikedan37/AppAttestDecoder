@@ -28,8 +28,8 @@ This checklist verifies that the frontend implementation is a pure signer and tr
 - [ ] Calls `DCAppAttestService.generateAssertion(keyID, clientDataHash:)` exactly once
 - [ ] No retries that regenerate assertions
 - [ ] No previews or "inspection assertions"
-- [ ] Assertion is generated immediately after receiving hash
-- [ ] No storage of assertion before sending
+- [ ] Assertion is generated immediately upon receiving hash
+- [ ] No storage of assertion prior to sending
 
 ### 4. Send verification request
 
@@ -100,7 +100,7 @@ If any of these occur, the implementation is invalid.
 - [ ] `generateAndSendAssertion()` function exists
 - [ ] Calls `generateAssertion()` exactly once
 - [ ] Uses hash verbatim (no modification)
-- [ ] Logs fingerprints before sending
+- [ ] Logs fingerprints prior to sending
 - [ ] Sends assertion immediately (no storage)
 
 ### Verification Request

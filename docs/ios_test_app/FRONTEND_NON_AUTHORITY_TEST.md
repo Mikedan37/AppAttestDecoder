@@ -100,7 +100,7 @@
 
 **Expected Results:**
 
-- Frontend does not disable buttons after rejection
+- Frontend does not disable buttons based on backend rejection status
 - Frontend does not prevent generating new assertions
 - Frontend does not clear state or block operations
 - UI remains functional regardless of backend response
@@ -113,9 +113,9 @@
 
 **Pass Criteria:**
 
-- [ ] Buttons remain enabled after rejection
-- [ ] Can generate new assertions after rejection
-- [ ] Can send assertions multiple times
+- [ ] Buttons remain enabled regardless of backend response status
+- [ ] New assertions can be generated
+- [ ] Assertions can be sent multiple times
 - [ ] No UI blocking or disabling based on backend status
 - [ ] Code review confirms no blocking logic
 
@@ -201,7 +201,7 @@
 
 **Steps:**
 
-1. Attempt operations out of order (e.g., send assertion before registration)
+1. Attempt operations out of order (e.g., send assertion without completing registration)
 2. Observe error messages
 3. Check for security language
 

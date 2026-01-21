@@ -22,9 +22,9 @@ Your iOS test app can generate an App Attest attestation and immediately inspect
 - **NO trust decisions**
 - **NO "this is valid" claims**
 
-### Server (Later / Optional)
+### Server
 
-**Actual Security Operations:**
+**Security Operations:**
 - Cryptographic signature verification
 - Certificate chain validation
 - Receipt submission to Apple
@@ -32,21 +32,18 @@ Your iOS test app can generate an App Attest attestation and immediately inspect
 - RP ID hash validation
 - Replay protection
 
-## Why This Works
+## Inspection Characteristics
 
-### You Are Not:
-- Faking verification
-- Replacing server validation
-- Making trust decisions on-device
-- Bypassing Apple's trust boundaries
+The on-device inspection:
+- Inspects data the app already possesses
+- Operates as a debugging and developer tool
+- Does not perform verification
+- Does not make trust decisions
+- Does not replace server validation
+- Preserves Apple's trust boundaries
+- Makes systems observable
 
-### You Are:
-- Inspecting data your app already possesses
-- Treating it as a debugging / developer tool
-- Preserving Apple's trust boundaries
-- Making systems observable
-
-**This is no different than:**
+**This is similar to:**
 - Dumping a certificate chain in Settings
 - Printing a receipt locally
 - Viewing X.509 certificate details
@@ -240,7 +237,7 @@ struct AttestationInspectorView: View {
 In your main test app view, add a button to open the inspector:
 
 ```swift
-// In ContentView.swift, after attestation generation:
+// In ContentView.swift, when attestation is available:
 
 if let attestationBlobB64 {
     // ... existing attestation display ...

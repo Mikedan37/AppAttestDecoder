@@ -521,16 +521,11 @@ Complete full flow and observe backend response display. Verify:
 
 **Test 2: No Blocking Based on Backend Response**
 
-After backend returns "rejected", attempt to:
-- Generate new assertion with same keyID
-- Send assertion again
-- Continue using the app
-
-Verify:
-- Buttons remain enabled after rejection
-- Can generate new assertions after rejection
-- Can send assertions multiple times
-- No UI blocking or disabling based on backend status
+When backend returns "rejected", verify:
+- Buttons remain enabled
+- New assertions can be generated with the same keyID
+- Assertions can be sent multiple times
+- No UI blocking or disabling occurs based on backend status
 
 **Test 3: No Local Security Decisions**
 
@@ -552,7 +547,7 @@ Complete full flow and open Flow Trace view. Verify:
 
 **Test 5: Error Messages Are State-Based**
 
-Attempt operations out of order (e.g., send assertion before registration). Verify:
+Attempt operations out of order (e.g., send assertion without completing registration). Verify:
 - Error messages describe state issues ("flowID missing", "keyID mismatch")
 - No security language ("invalid", "unauthorized", "blocked")
 - Messages clarify what state is needed, not why it's needed
@@ -640,7 +635,7 @@ Solutions:
 Symptoms: Register request fails, backend returns error about missing challenge.
 
 Solutions:
-- Ensure "Attest Key" completed before Register
+- Complete "Attest Key" step before attempting Register
 - Check `ClientDataContext` contains challenge
 - Verify challenge is base64-encoded correctly
 
@@ -707,7 +702,6 @@ Common log patterns:
 ### Implementation Reference
 
 - **`FRONTEND_INVARIANTS_CHECKLIST.md`** - Checklist of frontend invariants
-- **`FRONTEND_VIOLATIONS_AND_FIXES.md`** - Historical violations and fixes
 - **`DATA_FLOW.md`** - Detailed data flow documentation
 
 ### Setup Guides

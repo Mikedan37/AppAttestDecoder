@@ -67,7 +67,7 @@ This document provides a concise summary of what the frontend is responsible for
 ### 4. Blocking or Allowing
 
 - **Does NOT block** operations based on backend responses
-- **Does NOT disable** buttons after rejection
+- **Does NOT disable** buttons based on backend rejection status
 - **Does NOT prevent** generating new assertions
 - **Does NOT clear** state based on verification status
 - **Backend controls access**
