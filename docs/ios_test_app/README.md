@@ -1,73 +1,111 @@
 # iOS Test App Documentation
 
-> **⚠️ IMPORTANT:** This directory documents a **diagnostic iOS test application**.  
+> **IMPORTANT:** This directory documents a **diagnostic iOS test application**.  
 > It does not define production frontend behavior and must not be used as a security reference.  
 > For cryptographic verification and backend responsibilities, see the root `README.md` and `../VERIFICATION_GUIDE.md`.
 
 ---
 
-This directory contains documentation specific to the iOS test app (`AppAttestDecoderTestApp`), including frontend implementation contracts, setup guides, and troubleshooting.
+## Getting Started
 
-## Core Contracts
+**New to the test app?** Start here:
 
-- **`FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md`** - **START HERE**
-  - Defines what the frontend is allowed to do and must never do
-  - Specifies exact data sent to backend
+1. **`ROLE_OF_FRONTEND.md`** - Understand what the frontend does and never does
+2. **`SETUP.md`** - Set up and run the app
+3. **`EXAMPLES.md`** - See concrete examples of flows and behaviors
+4. **`DATA_FLOW.md`** - Learn what data is produced and sent
+5. **`TROUBLESHOOTING.md`** - Fix common issues
+
+---
+
+## Core Documentation
+
+### Role and Responsibilities
+
+- **`ROLE_OF_FRONTEND.md`** - **START HERE**
+  - What the frontend does
+  - What it never does
+  - Why this distinction matters
+
+- **`FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md`**
+  - Detailed contract defining frontend boundaries
+  - Exact data sent to backend
   - Canonical request flow diagram
   - Frontend invariants checklist
 
-- **`APP_ATTEST_E2E_CONTRACT.md`** (in parent directory)
-  - End-to-end contract between iOS test app and backend
-  - Flow, bindings, request/response specifications
-  - Source of truth for protocol
+### Setup and Usage
 
-## Implementation Guides
+- **`SETUP.md`**
+  - Prerequisites and Apple Developer setup
+  - Local network configuration
+  - Backend configuration
+  - Running the app
 
-- **`FRONTEND_INVARIANTS_CHECKLIST.md`**
-  - Checklist of frontend invariants
-  - Verification status
-  - Quick reference for compliance
+- **`DATA_FLOW.md`**
+  - What data is produced
+  - What data is sent to backend
+  - Important notes about validation
 
-- **`FRONTEND_VIOLATIONS_AND_FIXES.md`**
-  - Documents violations found and fixes applied
-  - Code change examples
-  - Reference for maintaining compliance
+- **`TROUBLESHOOTING.md`**
+  - Network connectivity issues
+  - App Attest capability problems
+  - State consistency errors
+  - Backend errors
+  - UI issues
 
-- **`FRONTEND_VERIFICATION_CHECKLIST.md`**
-  - Frontend verification checklist (if exists)
+- **`EXAMPLES.md`**
+  - Concrete examples: successful flow, failed response, repeated submission
+  - What frontend produces, sends, displays
+  - What frontend does not decide
 
-## Setup & Usage
+- **`WHAT_THIS_TEST_APP_MEASURES.md`**
+  - What the app can observe
+  - What the app cannot prove
+  - Measurement vs security
 
-- **`TEST_APP_GUIDE.md`**
-  - Complete guide for using the iOS test app
-  - Setup instructions
-  - Generating attestations and assertions
+- **`FRONTEND_NON_AUTHORITY_TEST.md`**
+  - Test checklist for frontend non-authority
+  - Verification that frontend makes no security decisions
+  - Can be reviewed without running the app
 
-- **`IOS_SANDBOX_SETUP.md`**
-  - iOS sandbox configuration
-  - Local network access setup
-  - App Transport Security configuration
+- **`FRONTEND_SUMMARY.md`**
+  - Concise summary of frontend responsibilities vs non-responsibilities
+  - Consistent wording reference
+  - Key principles
 
-- **`IOS_INSPECTOR_SETUP.md`**
-  - Inspector setup instructions
+---
 
-- **`IOS_ON_DEVICE_INSPECTION.md`**
-  - On-device inspection guide
+## Additional Resources
 
-## Quick Reference
+### Implementation Reference
 
-**For developers implementing the frontend:**
-1. Read `FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md` first
-2. Review `FRONTEND_INVARIANTS_CHECKLIST.md` before committing
-3. Reference `FRONTEND_VIOLATIONS_AND_FIXES.md` if unsure about boundaries
+- **`FRONTEND_INVARIANTS_CHECKLIST.md`** - Checklist of frontend invariants
+- **`FRONTEND_VIOLATIONS_AND_FIXES.md`** - Historical violations and fixes
+- **`TEST_APP_GUIDE.md`** - Complete guide for using the test app
+- **`IOS_SANDBOX_SETUP.md`** - Detailed sandbox configuration
+- **`IOS_INSPECTOR_SETUP.md`** - Inspector setup instructions
+- **`IOS_ON_DEVICE_INSPECTION.md`** - On-device inspection guide
 
-**For setting up the test app:**
-1. Start with `TEST_APP_GUIDE.md`
-2. Configure sandbox per `IOS_SANDBOX_SETUP.md`
-3. Use `IOS_INSPECTOR_SETUP.md` for inspection features
+### Protocol Contracts
 
-## Related Documentation
+- **`../APP_ATTEST_E2E_CONTRACT.md`** - End-to-end protocol contract (source of truth)
+- **`../VERIFICATION_GUIDE.md`** - Server-side verification responsibilities
+- **`../SIX_VALUES_PROCEDURE.md`** - Debugging procedure for verification failures
 
-- **Parent directory:** `APP_ATTEST_E2E_CONTRACT.md` - E2E protocol contract
-- **Parent directory:** `SIX_VALUES_PROCEDURE.md` - Debugging procedure
-- **Parent directory:** `VERIFICATION_GUIDE.md` - Server-side verification
+---
+
+## Learning Path
+
+**For developers learning App Attest:**
+
+1. Read `ROLE_OF_FRONTEND.md` to understand boundaries
+2. Follow `SETUP.md` to get the app running
+3. Review `DATA_FLOW.md` to see what data flows through
+4. Use `TROUBLESHOOTING.md` when issues arise
+
+**For developers implementing production frontends:**
+
+1. Read `FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md` for detailed contract
+2. Review `FRONTEND_INVARIANTS_CHECKLIST.md` for compliance
+3. Reference `../APP_ATTEST_E2E_CONTRACT.md` for protocol specification
+4. Do not copy test app code directly; use as reference only

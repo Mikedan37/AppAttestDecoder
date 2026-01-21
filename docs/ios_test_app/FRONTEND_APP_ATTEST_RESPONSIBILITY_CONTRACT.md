@@ -5,7 +5,7 @@
 **Status:** Mandatory  
 **Scope:** iOS Test App (`AppAttestDecoderTestApp`)
 
-> **⚠️ This document applies to the diagnostic test app only.**  
+> **This document applies to the diagnostic test app only.**  
 > Production frontend implementations should follow similar principles but must be validated independently.
 
 ## Purpose
@@ -28,7 +28,7 @@ The frontend **never** interprets cryptographic validity, makes trust decisions,
 
 ## What the Frontend IS Allowed To Do
 
-### ✅ Transport Operations
+### Transport Operations
 - Generate keys via `DCAppAttestService.generateKey()`
 - Generate attestations via `DCAppAttestService.attestKey(keyID, clientDataHash:)`
 - Generate assertions via `DCAppAttestService.generateAssertion(keyID, clientDataHash:)`
@@ -36,28 +36,28 @@ The frontend **never** interprets cryptographic validity, makes trust decisions,
 - Handle network errors (connection failures, timeouts, HTTP errors)
 - Display backend responses (success, rejection, errors)
 
-### ✅ Evidence Generation (Observational Only)
+###  Evidence Generation (Observational Only)
 - Decode artifacts for **logging and debugging only** (CBOR, ASN.1 parsing)
 - Extract raw bytes (authenticatorData, signature, certificates) for forensic logging
 - Compute hashes (SHA256) for log correlation and debugging
 - Store evidence temporarily for UI display (Diff View, inspection)
 - Export evidence bundles for independent verification (OpenSSL, backend debugging)
 
-### ✅ State Management (Continuity Only)
+###  State Management (Continuity Only)
 - Track `keyID` for UI state (which key is active)
 - Track `flowID` from backend REGISTER response
 - Track `verifyRunID` for log correlation
 - Store `challenge_id` for verify request construction
 - Maintain UI state (pending assertions, registration status)
 
-### ✅ Input Validation (Format Only)
+###  Input Validation (Format Only)
 - Validate base64 encoding (can decode)
 - Validate UUID format (challenge_id, flowID)
 - Validate byte lengths (clientDataHash is 32 bytes, challenge decodes to 32 bytes)
 - Validate JSON structure (can parse responses)
 - Validate URL encoding (query parameters properly encoded)
 
-### ✅ Canonical Data Construction
+###  Canonical Data Construction
 - Build canonical `clientData` JSON with sorted keys
 - Compute `SHA256(clientDataBytes)` for `clientDataHash`
 - Ensure byte-level consistency (same `clientDataBytes` hashed and sent)
@@ -66,34 +66,34 @@ The frontend **never** interprets cryptographic validity, makes trust decisions,
 
 ## What the Frontend MUST Never Do
 
-### ❌ Security Decisions
+###  Security Decisions
 - **Never** infer that an assertion "will not verify" or "will verify"
 - **Never** block assertion generation based on security assumptions
 - **Never** make trust decisions about artifacts
 - **Never** reject artifacts based on cryptographic interpretation
 - **Never** assume validity based on decoded structure
 
-### ❌ Validity Interpretation
+###  Validity Interpretation
 - **Never** claim artifacts are "valid" or "invalid"
 - **Never** infer verification success/failure beyond HTTP status codes
 - **Never** interpret certificate chain validity
 - **Never** interpret signature validity
 - **Never** make policy decisions (bundle ID matching, environment checks)
 
-### ❌ Trust Assumptions
+###  Trust Assumptions
 - **Never** assume backend acceptance means cryptographic validity
 - **Never** cache trust state ("this key is trusted")
 - **Never** reuse assertions across different challenges
 - **Never** assume continuity implies security
 
-### ❌ Cryptographic Verification
+###  Cryptographic Verification
 - **Never** verify ECDSA signatures locally (`CryptoKit.isValidSignature`)
 - **Never** validate certificate chains
 - **Never** check certificate expiration or revocation
 - **Never** verify RP ID hashes or nonces
 - **Never** perform any cryptographic validation
 
-### ❌ Assertion Reuse
+###  Assertion Reuse
 - **Never** reuse assertions for different challenges
 - **Never** cache assertions for "efficiency"
 - **Never** regenerate assertions from stored state
@@ -238,31 +238,31 @@ GET /app-attest/challenge?flowID=<uuid>&keyID=<base64>
 
 ## Frontend Invariants Checklist
 
-### ✅ Transport Invariants
+###  Transport Invariants
 - [ ] Attestation/assertion bytes are never modified after generation
 - [ ] Base64 encoding happens only at network boundary
 - [ ] No re-encoding, re-hashing, or transformation of artifacts
 - [ ] Network errors are handled without inferring security state
 
-### ✅ State Invariants
+###  State Invariants
 - [ ] `flowID` comes only from REGISTER response
 - [ ] `challenge_id` comes only from challenge response
 - [ ] `keyID` comes only from `DCAppAttestService`
 - [ ] No state is assumed or inferred
 
-### ✅ Evidence Invariants
+###  Evidence Invariants
 - [ ] Decoding is observational only (for logging)
 - [ ] Evidence is never used for security decisions
 - [ ] Hashes are computed for correlation, not validation
 - [ ] Raw bytes are preserved alongside decoded values
 
-### ✅ Request Construction Invariants
+###  Request Construction Invariants
 - [ ] `clientDataBytes` is built once with sorted keys
 - [ ] `clientDataHash` is computed once from `clientDataBytes`
 - [ ] Same `clientDataBytes` is hashed and sent (byte-for-byte)
 - [ ] `assertionObject` is sent unchanged from `generateAssertion()`
 
-### ✅ Response Handling Invariants
+###  Response Handling Invariants
 - [ ] Backend responses are displayed, not interpreted
 - [ ] HTTP status codes are handled, not inferred
 - [ ] No trust decisions based on response content
@@ -272,7 +272,7 @@ GET /app-attest/challenge?flowID=<uuid>&keyID=<base64>
 
 ## Violations Found in Current Implementation
 
-### 🔴 Security Decision Violations
+### Security Decision Violations
 
 **File:** `ContentView.swift`
 
@@ -291,7 +291,7 @@ GET /app-attest/challenge?flowID=<uuid>&keyID=<base64>
    - **Fix:** Change to: `"Bundle ID mismatch - backend may reject based on policy"`
    - **Rationale:** Policy concern, not cryptographic validity
 
-### 🟡 State Consistency Checks (Acceptable, but wording needs fix)
+### State Consistency Checks (Acceptable, but wording needs fix)
 
 **File:** `ContentView.swift`
 
@@ -301,14 +301,14 @@ GET /app-attest/challenge?flowID=<uuid>&keyID=<base64>
    - **Fix:** Change error messages to focus on state consistency, not verification outcome
    - **Example:** `"keyID mismatch – cannot generate assertion: state inconsistency"`
 
-### ✅ Correctly Implemented
+###  Correctly Implemented
 
-- ✅ No local signature verification (`CryptoKit.isValidSignature` removed)
-- ✅ Assertions treated as opaque (decoding for logging only)
-- ✅ Backend responses displayed without interpretation
-- ✅ Evidence generation is observational only
-- ✅ No assertion caching across challenges
-- ✅ Raw bytes preserved and sent unchanged
+-  No local signature verification (`CryptoKit.isValidSignature` removed)
+-  Assertions treated as opaque (decoding for logging only)
+-  Backend responses displayed without interpretation
+-  Evidence generation is observational only
+-  No assertion caching across challenges
+-  Raw bytes preserved and sent unchanged
 
 ---
 
@@ -332,20 +332,20 @@ backendError = "keyID mismatch – cannot generate assertion: state inconsistenc
 
 ```swift
 // BEFORE:
-print("[ContentView]   ✗ WARNING: Bundle ID mismatch - assertion will NOT verify!")
+print("[ContentView]    WARNING: Bundle ID mismatch - assertion will NOT verify!")
 
 // AFTER:
-print("[ContentView]   ⚠ WARNING: Bundle ID mismatch - backend may reject based on policy")
+print("[ContentView] WARNING: Bundle ID mismatch - backend may reject based on policy")
 ```
 
 **Line 209:** Update init warning:
 
 ```swift
 // BEFORE:
-print("[ContentView] ✗ App Attest signatures will NOT verify if backend uses different bundle ID")
+print("[ContentView]  App Attest signatures will NOT verify if backend uses different bundle ID")
 
 // AFTER:
-print("[ContentView] ⚠ Bundle ID mismatch - backend may reject based on policy")
+print("[ContentView] WARNING: Bundle ID mismatch - backend may reject based on policy")
 ```
 
 ### Change 2: Clarify State Consistency vs Security
@@ -384,16 +384,16 @@ After implementing changes, verify:
 ## Summary
 
 The frontend's role is **transport and evidence generation only**. It must:
-- ✅ Generate artifacts via Apple APIs
-- ✅ Transport them unchanged
-- ✅ Log evidence for debugging
-- ✅ Display backend responses
+-  Generate artifacts via Apple APIs
+-  Transport them unchanged
+-  Log evidence for debugging
+-  Display backend responses
 
 It must **never**:
-- ❌ Infer cryptographic validity
-- ❌ Make trust decisions
-- ❌ Interpret security state
-- ❌ Cache or reuse assertions improperly
+-  Infer cryptographic validity
+-  Make trust decisions
+-  Interpret security state
+-  Cache or reuse assertions improperly
 
 All security decisions belong to the backend. The frontend is a byte transport layer with observational logging.
 

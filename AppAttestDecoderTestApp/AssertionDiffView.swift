@@ -3,7 +3,7 @@
 //  AppAttestDecoderTestApp
 //
 //  Compares iOS CryptoEvidence (from EvidenceStore) to backend forensics. Dev-only.
-//  Green ✓ for match, red for mismatch; first differing byte index and hex window when both raw buffers available.
+//  Green for match, red for mismatch; first differing byte index and hex window when both raw buffers available.
 //
 
 import SwiftUI
@@ -48,7 +48,7 @@ struct AssertionDiffView: View {
                 Section("authenticatorData.sha256") {
                     let (m, a, b) = cmp("authenticatorData.sha256", i.authenticatorData_sha256, be.authenticatorData_sha256)
                     HStack {
-                        Text(m ? "✓" : "✗").foregroundColor(m ? .green : .red)
+                        Text(m ? "MATCH" : "MISMATCH").foregroundColor(m ? .green : .red)
                         Text("iOS: \(a)").font(.system(.caption, design: .monospaced))
                         Text("BE:  \(b)").font(.system(.caption, design: .monospaced))
                     }
@@ -60,16 +60,16 @@ struct AssertionDiffView: View {
                 }
                 Section("storedClientDataHash.sha256") {
                     let (m, a, b) = cmp("storedClientDataHash.sha256", i.clientDataHash_sha256, be.storedClientDataHash_sha256)
-                    HStack { Text(m ? "✓" : "✗").foregroundColor(m ? .green : .red); Text("iOS: \(a)"); Text("BE: \(b)") }
+                    HStack { Text(m ? "MATCH" : "MISMATCH").foregroundColor(m ? .green : .red); Text("iOS: \(a)"); Text("BE: \(b)") }
                 }
                 Section("signature.sha256") {
                     let (m, a, b) = cmp("signature.sha256", i.signature_sha256, be.signature_sha256)
-                    HStack { Text(m ? "✓" : "✗").foregroundColor(m ? .green : .red); Text("iOS: \(a)"); Text("BE: \(b)") }
+                    HStack { Text(m ? "MATCH" : "MISMATCH").foregroundColor(m ? .green : .red); Text("iOS: \(a)"); Text("BE: \(b)") }
                 }
                 Section("signedBytes.sha256") {
                     let beVal = be.signedBytesA_sha256 ?? be.digestA_hex
                     let (m, a, b) = cmp("signedBytes.sha256", i.signedBytes_sha256, beVal)
-                    HStack { Text(m ? "✓" : "✗").foregroundColor(m ? .green : .red); Text("iOS: \(a)"); Text("BE:  \(b)") }
+                    HStack { Text(m ? "MATCH" : "MISMATCH").foregroundColor(m ? .green : .red); Text("iOS: \(a)"); Text("BE:  \(b)") }
                 }
             }
         }

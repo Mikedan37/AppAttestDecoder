@@ -58,7 +58,7 @@ final class ForensicModeTest: XCTestCase {
             XCTAssertTrue(hasAppleExt, "Should have Apple extensions")
         }
         
-        print("✅ Forensic mode test passed")
+        print("Forensic mode test passed")
         print("   - Forensic view output length: \(forensicOutput.count) chars")
         print("   - JSON output length: \(jsonOutput.count) chars")
         print("   - Certificate chain length: \(attestation.attestationStatement.x5c.count)")

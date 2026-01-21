@@ -4,7 +4,7 @@
 
 A Swift library and CLI for inspecting Apple App Attest attestation and assertion artifacts.
 
-> ⚠️ **Decoder-only.** No verification. No trust decisions.
+> **Decoder-only.** No verification. No trust decisions.
 
 Parses CBOR, ASN.1, COSE, and X.509 into semantic, forensic, diffable, and JSON representations. Performs no cryptographic verification, validation, or execution-context interpretation.
 
@@ -108,9 +108,17 @@ Device → Attestation Artifact → [ THIS TOOL ] → Parsed Evidence → Your V
 - **Inspection** (this tool): Structural parsing, field extraction, evidence preservation
 - **Verification** (your code): Cryptographic validation, certificate chain validation, policy enforcement
 
-## iOS reference app (AppAttestDecoderTestApp)
+## iOS Test App (AppAttestDecoderTestApp)
 
-The in-repo iOS target is a **reference frontend only**—not a production client. It is intentionally verbose, forensic, and non-optimized for clarity and debugging.
+The in-repo iOS target is a **diagnostic test application**—not a production client. It is intentionally verbose, forensic, and non-optimized for clarity and debugging.
+
+**Documentation:** See `docs/ios_test_app/README.md` for complete documentation including setup, data flow, and troubleshooting.
+
+**Key documents:**
+- `docs/ios_test_app/ROLE_OF_FRONTEND.md` - What the frontend does and never does
+- `docs/ios_test_app/SETUP.md` - How to set up and run the app
+- `docs/ios_test_app/DATA_FLOW.md` - What data is produced and sent
+- `docs/ios_test_app/TROUBLESHOOTING.md` - Common issues and solutions
 
 Flow, protocol, bindings, and ownership: **docs/APP_ATTEST_E2E_CONTRACT.md** (source of truth; this README does not restate them).
 
@@ -152,9 +160,13 @@ The decoder is for **inspection only**. Implement a separate validator for secur
 - **Server-Side Verification:** `docs/VERIFICATION_GUIDE.md`
 - **Design Philosophy:** `docs/DESIGN_PHILOSOPHY.md` - Tradeoffs and non-goals
 - **E2E Contract (test app + backend):** `docs/APP_ATTEST_E2E_CONTRACT.md` — **source of truth** for flow, bindings, request/response
-- **Frontend Responsibility Contract:** `docs/ios_test_app/FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md` — frontend boundaries and invariants
+- **iOS Test App Documentation:** `docs/ios_test_app/README.md` — complete documentation for the diagnostic test app
+  - `docs/ios_test_app/ROLE_OF_FRONTEND.md` — what the frontend does and never does
+  - `docs/ios_test_app/SETUP.md` — setup and configuration
+  - `docs/ios_test_app/DATA_FLOW.md` — data flow and protocol
+  - `docs/ios_test_app/TROUBLESHOOTING.md` — common issues and solutions
+- **Frontend Responsibility Contract:** `docs/ios_test_app/FRONTEND_APP_ATTEST_RESPONSIBILITY_CONTRACT.md` — detailed frontend boundaries and invariants
 - **SIX_VALUES Procedure:** `docs/SIX_VALUES_PROCEDURE.md` - Compare frontend vs backend when verify fails
-- **iOS Test App Documentation:** `docs/ios_test_app/` — setup guides, contracts, and troubleshooting for the test app
 
 ## Requirements
 
@@ -216,4 +228,4 @@ See `LICENSE` file.
 
 **Status:** Stable for inspection and analysis workflows. See `docs/PROJECT_STATUS.md` for complete assessment.
 
-**⚠️ Important:** "Stable" refers to API stability and parsing correctness, not security guarantees. This tool performs inspection only and must not be used to make authorization decisions.
+**Important:** "Stable" refers to API stability and parsing correctness, not security guarantees. This tool performs inspection only and must not be used to make authorization decisions.

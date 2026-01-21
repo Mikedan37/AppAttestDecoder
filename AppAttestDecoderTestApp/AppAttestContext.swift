@@ -102,7 +102,7 @@ class ClientDataContextManager {
         contexts[keyID] = newContext
         
         #if DEBUG
-        print("[ClientDataContextManager] ✓ Created NEW clientDataContext for keyID: \(keyID)")
+        print("[ClientDataContextManager] Created NEW clientDataContext for keyID: \(keyID)")
         print("[ClientDataContextManager]   clientDataHash (b64): \(newContext.clientDataHash.base64EncodedString())")
         print("[ClientDataContextManager]   challenge (b64): \(newContext.challenge.base64EncodedString())")
         print("[ClientDataContextManager]   timestamp: \(newContext.timestamp)")

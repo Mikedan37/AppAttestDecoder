@@ -5,7 +5,7 @@ import UIKit
 import AppAttestCore
 
 // Trust model (frontend): Assertions are opaque Secure Enclave artifacts.
-// Cryptographic validity is determined by Apple App Attest and backend verification, not by on-device ECDSA verification.
+// Cryptographic validity is determined by the Secure Enclave and backend verification, not by on-device ECDSA verification.
 
 enum InspectorMode {
     case live
@@ -19,14 +19,14 @@ enum InspectorMode {
 /// - Empirical: DCAppAttestService.generateAssertion returns a signature that does not pass
 ///   CryptoKit's isValidSignature(signature, for: authenticatorData||clientDataHash) even with
 ///   identical inputs. ECDSA self-check on-device fails.
-/// - Apple does not publish a signed-message contract for the assertion blob. Cryptographic validity
-///   is determined by Apple Secure Enclave and attestation binding (keyID ↔ credential); the backend performs
+/// - The App Attest API does not publish a signed-message contract for the assertion blob. Cryptographic validity
+///   is determined by the Secure Enclave and attestation binding (keyID ↔ credential); the backend performs
 ///   the only meaningful verification. See docs/APP_ATTEST_E2E_CONTRACT.md.
 ///
 /// Removed: CryptoKit_signs_MESSAGE_not_digest, self_check, and any local ECDSA/P256 verification.
 /// Assertions are opaque Secure Enclave artifacts; such checks are not a correctness signal and empirically fail.
 enum AssertionTrustModel {
-    /// Assertion cryptographic validity is determined by Apple Secure Enclave and attestation
+    /// Assertion cryptographic validity is determined by the Secure Enclave and attestation
     /// binding, not by local ECDSA verification. Frontend: key continuity, flowID continuity,
     /// challenge freshness, clientDataHash integrity, assertion CBOR structural sanity only.
     case opaqueAppleAssertion
@@ -142,7 +142,7 @@ struct ContentView: View {
             return nil
         }
         guard let bits = cert.subjectPublicKeyBits, bits.count == 65, bits.first == 0x04 else {
-            print("[ContentView] extractX963FromLeafCertSPKI: leaf SPKI must be 65-byte x963 starting 0x04, got \(cert.subjectPublicKeyBits?.count ?? 0) bytes")
+            print("[ContentView] extractX963FromLeafCertSPKI: leaf SPKI expected 65-byte x963 starting 0x04, got \(cert.subjectPublicKeyBits?.count ?? 0) bytes")
             return nil
         }
         return bits
@@ -166,7 +166,7 @@ struct ContentView: View {
     @State private var isRequestingChallenge = false
     @State private var registrationSucceeded = false
     @State private var registeredKeyID: String? // Track the keyID that was successfully registered
-    @State private var currentFlowID: String? // IMPORTANT: Single source of truth for flowID - generated after REGISTER, reused for CLIENT_DATA_HASH and VERIFY
+    @State private var currentFlowID: String? // IMPORTANT: flowID storage - generated after REGISTER, reused for CLIENT_DATA_HASH and VERIFY
     @State private var storedPublicKeyX963: Data? // X9.63 public key from REGISTER response or extracted from attestation; included in backend verification payload
     @State private var currentVerifyRunID: String? // Monotonic ID per verify attempt: grep this to reconstruct TRANSPORT→CLIENT_DATA_HASH→KEY_IDENTITY→DECODED→DIGESTS→RESULT
     @State private var lastBackendForensics: (runID: String, forensics: BackendForensics)? = nil // From /verify "forensics" (dev-only); for Diff View
@@ -177,7 +177,7 @@ struct ContentView: View {
     @State private var lastRegisterTarget: String? = nil   // full URL used when REGISTER fired; for plumbing debug
     @State private var pingResult: String? = nil
     @State private var isPinging = false
-    @State private var groundTruthPublicKeyX963: Data? = nil  // x963 from attestation x5c[0] SPKI only; for ground-truth bundle
+    @State private var evidencePublicKeyX963: Data? = nil  // x963 from attestation x5c[0] SPKI only; for evidence bundle export
 
     // UI display state (for debugging)
     @State private var lastExpiresAt: String?
@@ -191,6 +191,8 @@ struct ContentView: View {
     
     @State private var showShareSheet = false
     @State private var mode: InspectorMode = .live
+    @State private var flowTraceEntries: [FlowTraceEntry] = []
+    @State private var showFlowTrace = false
     
     init() {
         print("[ContentView] Initializing...")
@@ -203,11 +205,11 @@ struct ContentView: View {
         print("[ContentView] Running bundle ID: \(bundleID)")
         print("[ContentView] Expected bundle ID: DanylchukStudios.AppAttestDecoderTestApp")
         if bundleID == "DanylchukStudios.AppAttestDecoderTestApp" {
-            print("[ContentView] ✓ Bundle ID matches expected value")
+            print("[ContentView] Bundle ID matches expected value")
         } else {
             print("[ContentView] ⚠ WARNING: Bundle ID mismatch!")
             print("[ContentView] ⚠ Bundle ID mismatch - backend may reject based on policy")
-            print("[ContentView] ⚠ Backend must use exact bundle ID: \(bundleID)")
+            print("[ContentView] Backend expects bundle ID: \(bundleID)")
         }
         print("[ContentView] ========================================")
     }
@@ -255,8 +257,8 @@ struct ContentView: View {
 
         guard let ctx = ClientDataContextManager.shared.getContext(for: keyID), !ctx.challenge.isEmpty else {
             isRegistering = false
-            backendError = "challenge_base64 required for register: no ClientDataContext or empty challenge for this keyID. Tap 'Attest Key' first."
-            print("[ContentView] ✗ REGISTER aborted: challenge missing for keyID. Tap Attest Key first.")
+            backendError = "challenge_base64 missing for register: no ClientDataContext or empty challenge for this keyID. Tap 'Attest Key' first."
+            print("[ContentView] ERROR: REGISTER aborted: challenge missing for keyID. Tap Attest Key first.")
             return
         }
         let challenge_base64 = ctx.challenge.base64EncodedString()
@@ -272,14 +274,14 @@ struct ContentView: View {
             print("[ContentView] REGISTER - keyID (hex): \(keyIDHex)")
             print("[ContentView] REGISTER - keyID_sha256_hex: \(keyID_sha256_hex)")
             
-            // Verify keyID matches KeyManager
+            // State consistency check: keyID matches KeyManager (for UI consistency, not security)
             if let storedKeyID = keyManager.getKeyID() {
                 if let storedKeyIDData = Data(base64Encoded: storedKeyID) {
                     let storedKeyID_sha256_hex = sha256Hex(storedKeyIDData)
                     if keyID_sha256_hex == storedKeyID_sha256_hex {
-                        print("[ContentView] ✓ REGISTER keyID matches KeyManager - key continuity check passed (state consistency)")
+                        print("[ContentView] REGISTER keyID matches KeyManager - key continuity check passed (state consistency)")
                     } else {
-                        print("[ContentView] ✗ ERROR: REGISTER keyID does NOT match KeyManager!")
+                        print("[ContentView] ERROR: ERROR: REGISTER keyID does NOT match KeyManager!")
                         print("[ContentView]   REGISTER keyID_sha256_hex: \(keyID_sha256_hex)")
                         print("[ContentView]   KeyManager keyID_sha256_hex: \(storedKeyID_sha256_hex)")
                     }
@@ -325,17 +327,17 @@ struct ContentView: View {
                 self.isRegistering = false
                 
                 if let error {
-                    // Network error = registration failed = block verification
+                    // Network error = registration failed = cannot proceed to assertion generation
                     self.registrationSucceeded = false
                     self.backendError = "Network error: \(error.localizedDescription)"
-                    print("[ContentView] ✗ Registration failed (network error) - cannot proceed to assertion generation (state consistency)")
+                    print("[ContentView] ERROR: Registration failed (network error) - cannot proceed to assertion generation (state consistency)")
                     return
                 }
                 
                 guard let httpResponse = response as? HTTPURLResponse else {
                     self.registrationSucceeded = false
                     self.backendError = "Invalid response"
-                    print("[ContentView] ✗ REGISTER failed (invalid response) - cannot proceed to assertion generation (state consistency)")
+                    print("[ContentView] ERROR: REGISTER failed (invalid response) - cannot proceed to assertion generation (state consistency)")
                     return
                 }
                 
@@ -345,7 +347,7 @@ struct ContentView: View {
                 guard (200...299).contains(httpResponse.statusCode) else {
                     self.registrationSucceeded = false
                     self.backendError = "HTTP error: \(httpResponse.statusCode)"
-                    print("[ContentView] ✗ REGISTER failed (HTTP \(httpResponse.statusCode)) - cannot proceed to assertion generation (state consistency)")
+                    print("[ContentView] ERROR: REGISTER failed (HTTP \(httpResponse.statusCode)) - cannot proceed to assertion generation (state consistency)")
                     if let data = data, let body = String(data: data, encoding: .utf8) {
                         print("[ContentView] REGISTER response body: \(body)")
                     }
@@ -355,7 +357,7 @@ struct ContentView: View {
                 guard let data = data else {
                     self.registrationSucceeded = false
                     self.backendError = "No response data"
-                    print("[ContentView] ✗ REGISTER failed (no data) - cannot proceed to assertion generation (state consistency)")
+                    print("[ContentView] ERROR: REGISTER failed (no data) - cannot proceed to assertion generation (state consistency)")
                     return
                 }
                 
@@ -363,7 +365,7 @@ struct ContentView: View {
                 guard let jsonString = String(data: data, encoding: .utf8) else {
                     self.registrationSucceeded = false
                     self.backendError = "Invalid response encoding"
-                    print("[ContentView] ✗ REGISTER failed (invalid encoding) - cannot proceed to assertion generation (state consistency)")
+                    print("[ContentView] ERROR: REGISTER failed (invalid encoding) - cannot proceed to assertion generation (state consistency)")
                     return
                 }
                 
@@ -378,7 +380,7 @@ struct ContentView: View {
                     self.currentVerifyRunID = nil
                     EvidenceStore.shared.clear()
                     self.backendError = "Invalid REGISTER response JSON"
-                    print("[ContentView] ✗ REGISTER failed - invalid JSON")
+                    print("[ContentView] ERROR: REGISTER failed - invalid JSON")
                     return
                 }
 
@@ -393,8 +395,8 @@ struct ContentView: View {
                         self.storedPublicKeyX963 = nil
                         self.currentVerifyRunID = nil
                         EvidenceStore.shared.clear()
-                        self.backendError = "CRITICAL: flowID missing or empty in REGISTER response. Cannot proceed."
-                        print("[ContentView] ✗ REGISTER failed - flowID missing in response")
+                        self.backendError = "State error: flowID missing or empty in REGISTER response. Cannot proceed."
+                        print("[ContentView] ERROR: REGISTER failed - flowID missing in response")
                         return
                     }
                     self.registrationSucceeded = true
@@ -407,10 +409,19 @@ struct ContentView: View {
                     } else {
                         self.storedPublicKeyX963 = nil
                     }
-                    self.backendResponse = "✅ \(jsonString)"
-                    print("[ContentView] ✅ REGISTER succeeded - flowID received, ready for assertion generation")
-                    print("[ContentView] ✓ Stored registered keyID for continuity checks: \(keyID)")
+                    self.backendResponse = jsonString
+                    print("[ContentView] REGISTER succeeded - flowID received, ready for assertion generation")
+                    print("[ContentView] Stored registered keyID for continuity checks: \(keyID)")
                     print("[ContentView] REGISTER - flowID: \(flowID) (BACKEND-ISSUED)")
+                    
+                    // Add flow trace entry
+                    flowTraceEntries.append(FlowTraceEntry(
+                        step: "Registration",
+                        timestamp: Date(),
+                        flowID: flowID,
+                        status: "completed",
+                        details: "keyID registered, flowID received"
+                    ))
 
                     self.pendingAssertionB64 = nil
                     self.pendingExpiresAt = nil
@@ -423,7 +434,7 @@ struct ContentView: View {
                     self.currentVerifyRunID = nil
                     EvidenceStore.shared.clear()
                     self.backendError = response.reason ?? "Unknown rejection"
-                    print("[ContentView] ✗ REGISTER rejected: \(self.backendError ?? "")")
+                    print("[ContentView] ERROR: REGISTER rejected: \(self.backendError ?? "")")
 
                 default:
                     self.registrationSucceeded = false
@@ -433,7 +444,7 @@ struct ContentView: View {
                     self.currentVerifyRunID = nil
                     EvidenceStore.shared.clear()
                     self.backendError = "Unknown status: \(response.status)"
-                    print("[ContentView] ✗ REGISTER unknown status: \(response.status)")
+                    print("[ContentView] ERROR: REGISTER unknown status: \(response.status)")
                 }
             }
         }.resume()
@@ -484,13 +495,13 @@ struct ContentView: View {
     }
 
     /// Called when attestKey succeeds. Extract x963 from x5c[0] SPKI only; store and log. On failure, set attestationError and print.
-    private func onAttestationSucceededForGroundTruth(_ attestationData: Data, keyID: String) {
+    private func onAttestationSucceededForEvidence(_ attestationData: Data, keyID: String) {
         guard let pk = extractX963FromLeafCertSPKI(attestationData) else {
-            groundTruthPublicKeyX963 = nil
+            evidencePublicKeyX963 = nil
             attestationError = "Public key extraction from attestation leaf cert failed. See console."
             return
         }
-        groundTruthPublicKeyX963 = pk
+        evidencePublicKeyX963 = pk
         print("[ContentView] publicKey_source=leaf_certificate_spki publicKey_x963_length=\(pk.count) publicKey_x963_hex=\(pk.map { String(format: "%02x", $0) }.joined()) publicKey_x963_sha256=\(sha256Hex(pk))")
 
         let keyIDBytes = Data(base64Encoded: keyID) ?? Data()
@@ -505,15 +516,15 @@ struct ContentView: View {
     }
 
     /// Build OpenSSL-ready JSON from evidence publicKey (x5c[0] SPKI) and last assertion evidence. On missing data or serialization failure, set backendError and print.
-    private func copyGroundTruthBundle() {
-        guard let pk = groundTruthPublicKeyX963 else {
+    private func copyEvidenceBundle() {
+        guard let pk = evidencePublicKeyX963 else {
             backendError = "Evidence: missing public key. Attest first."
-            print("[ContentView] copyGroundTruthBundle: groundTruthPublicKeyX963 is nil")
+            print("[ContentView] copyEvidenceBundle: evidencePublicKeyX963 is nil")
             return
         }
         guard let ev = EvidenceStore.shared.getLast() else {
             backendError = "Evidence: no assertion evidence. Run Assert Key and Verify once."
-            print("[ContentView] copyGroundTruthBundle: no assertion evidence. Run Assert Key and Verify once.")
+            print("[ContentView] copyEvidenceBundle: no assertion evidence. Run Assert Key and Verify once.")
             return
         }
         let pub: [String: Any] = [
@@ -551,7 +562,7 @@ struct ContentView: View {
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: top), let str = String(data: data, encoding: .utf8) else {
             backendError = "Evidence: JSON serialization failed."
-            print("[ContentView] copyGroundTruthBundle: JSON serialization failed")
+            print("[ContentView] copyEvidenceBundle: JSON serialization failed")
             return
         }
         UIPasteboard.general.string = str
@@ -559,7 +570,7 @@ struct ContentView: View {
 
     /// Copy JSON for backend debug endpoint: publicKeyX963_hex, signedBytes_hex, signatureDER_hex. Raw hex only, no base64, no pretty. On missing data, set backendError.
     private func copyOpenSSLPayload() {
-        let pk = groundTruthPublicKeyX963 ?? storedPublicKeyX963 ?? EvidenceStore.shared.getLast()?.publicKeyX963
+        let pk = evidencePublicKeyX963 ?? storedPublicKeyX963 ?? EvidenceStore.shared.getLast()?.publicKeyX963
         guard let publicKeyX963 = pk else {
             backendError = "OpenSSL payload: missing public key. Attest and register first."
             print("[ContentView] copyOpenSSLPayload: no publicKeyX963")
@@ -630,22 +641,22 @@ struct ContentView: View {
     }
 
     /// Request challenge from backend, build canonical clientData, compute clientDataHash, generate assertion
-    /// CRITICAL: Frontend builds clientData JSON with sorted keys, computes SHA256(clientDataBytes), passes to generateAssertion
+    /// IMPORTANT: Frontend builds clientData JSON with sorted keys, computes SHA256(clientDataBytes), passes to generateAssertion
     /// Step 1: GET /app-attest/challenge?flowID=...&keyID=... -> { challenge_b64, challenge_id, expiresAt }
     /// Step 2: Build ClientDataPayload (canonical JSON with sorted keys)
     /// Step 3: Compute clientDataHash = SHA256(clientDataBytes)
     /// Step 4: Generate assertion with computed clientDataHash
     func requestChallengeAndGenerateAssertion(keyID: String) {
-        // HARD GATE: Fail fast if registration didn't succeed
+        // State check: Fail fast if registration didn't succeed
         guard registrationSucceeded else {
-            backendError = "Attestation must be registered first. Tap 'Register Attestation' and wait for success."
+            backendError = "Attestation not registered. Tap 'Register Attestation' and wait for success."
             return
         }
         
         // IMPORTANT: State consistency check - keyID matches the registered keyID (for UI consistency, not security)
         guard let registeredKeyID = registeredKeyID, registeredKeyID == keyID else {
             backendError = "KeyID mismatch! The key used for assertion does not match the registered key. Generate new key and register again."
-            print("[ContentView] ✗ ERROR: keyID mismatch in /challenge request")
+            print("[ContentView] ERROR: ERROR: keyID mismatch in /challenge request")
             if let registeredKeyID = registeredKeyID {
                 print("[ContentView]   Registered keyID: \(registeredKeyID)")
                 if let regKeyIDData = Data(base64Encoded: registeredKeyID) {
@@ -676,11 +687,11 @@ struct ContentView: View {
             return
         }
         
-        // HARD GUARD: flowID must exist - no silent fallbacks
+        // State check: flowID expected to exist - no silent fallbacks
         guard let flowID = currentFlowID else {
-            backendError = "CRITICAL: flowID is missing. Registration must succeed and return flowID first."
-            print("[ContentView] ✗ ERROR: CHALLENGE request attempted without flowID")
-            print("[ContentView] ✗ flowID must be provided by backend in REGISTER response")
+            backendError = "State error: flowID is missing. Registration needs to succeed and return flowID first."
+            print("[ContentView] ERROR: ERROR: CHALLENGE request attempted without flowID")
+            print("[ContentView] ERROR: flowID expected from backend in REGISTER response")
             return
         }
         
@@ -691,16 +702,25 @@ struct ContentView: View {
         backendError = nil
         backendResponse = nil
         
-        // STEP 6: State Integrity Check
-        let keyID_sha256_hex: String
-        if let keyIDData = Data(base64Encoded: keyID) {
-            keyID_sha256_hex = sha256Hex(keyIDData)
-        } else {
-            keyID_sha256_hex = "invalid"
-        }
-        print("[FRONTEND][STATE] verifyRunID=\(verifyRunID)")
-        print("[FRONTEND][STATE] flowID=\(flowID)")
-        print("[FRONTEND][STATE] keyID_sha256=\(keyID_sha256_hex)")
+        // STEP 6: State Integrity Check (flowID expected to exist)
+                let keyID_sha256_hex: String
+                if let keyIDData = Data(base64Encoded: keyID) {
+                    keyID_sha256_hex = sha256Hex(keyIDData)
+                } else {
+                    keyID_sha256_hex = "invalid"
+                }
+                print("[FRONTEND][STATE] verifyRunID=\(verifyRunID)")
+                print("[FRONTEND][STATE] flowID=\(flowID)")
+                print("[FRONTEND][STATE] keyID_sha256=\(keyID_sha256_hex)")
+                
+                // Add flow trace entry for challenge request
+                flowTraceEntries.append(FlowTraceEntry(
+                    step: "Challenge Request",
+                    timestamp: Date(),
+                    flowID: flowID,
+                    status: "sent",
+                    details: "verifyRunID: \(verifyRunID)"
+                ))
         
         // Log raw keyID before encoding
         print("[FRONTEND][CHALLENGE][KEYID] verifyRunID=\(verifyRunID)")
@@ -708,8 +728,8 @@ struct ContentView: View {
         print("[FRONTEND][CHALLENGE][KEYID] contains_plus=\(keyID.contains("+"))")
         print("[FRONTEND][CHALLENGE][KEYID] contains_equals=\(keyID.contains("="))")
         
-        // STEP 2: Build URL using URLComponents + URLQueryItem (CRITICAL)
-        // CRITICAL RULE: Let URLComponents do ALL encoding. Do NOT manually encode anything.
+        // STEP 2: Build URL using URLComponents + URLQueryItem
+        // IMPORTANT: Let URLComponents do ALL encoding. Do NOT manually encode anything.
         // Pass raw base64 keyID to URLQueryItem - it will encode + as %2B and = as %3D automatically.
         // Never double-encode: either YOU encode OR URLComponents encodes, never both.
         
@@ -728,7 +748,7 @@ struct ContentView: View {
         
         // OPTION B: Encode values manually, then build percentEncodedQuery directly
         // This avoids double-encoding: we encode once, URLComponents does NOT encode again
-        // CRITICAL: URLQueryItem does NOT encode '+' by default, and if we pre-encode and pass to URLQueryItem,
+        // IMPORTANT: URLQueryItem does NOT encode '+' by default, and if we pre-encode and pass to URLQueryItem,
         // it will double-encode (% becomes %25). So we bypass URLQueryItem entirely.
         
         // Encode keyID value: + -> %2B, / -> %2F, = -> %3D
@@ -748,7 +768,7 @@ struct ContentView: View {
         print("[FRONTEND][CHALLENGE][ENCODING] verifyRunID=\(verifyRunID)")
         print("[FRONTEND][CHALLENGE][ENCODING] url.absoluteString=\(url.absoluteString)")
         
-        // CRITICAL ASSERTION: Raw + must never appear in URL (backend treats + as space)
+        // IMPORTANT CHECK: Raw + must never appear in URL (backend treats + as space)
         assert(!url.absoluteString.contains("+"), "Raw + detected in URL — encoding bug")
         if url.absoluteString.contains("+") {
             isRequestingChallenge = false
@@ -758,7 +778,7 @@ struct ContentView: View {
             return
         }
         
-        // CRITICAL ASSERTION: Raw space must never appear in URL
+        // IMPORTANT CHECK: Raw space must never appear in URL
         assert(!url.absoluteString.contains(" "), "Raw space detected in URL — encoding bug")
         if url.absoluteString.contains(" ") {
             isRequestingChallenge = false
@@ -768,7 +788,7 @@ struct ContentView: View {
             return
         }
         
-        // CRITICAL VALIDATION: Check for double-encoding (should never see %252B, %252F, or %253D)
+        // IMPORTANT CHECK: Check for double-encoding (should never see %252B, %252F, or %253D)
         if url.absoluteString.contains("%252B") || url.absoluteString.contains("%252F") || url.absoluteString.contains("%253D") {
             isRequestingChallenge = false
             backendError = "URL encoding error: double-encoding detected (%25XX). Remove manual encoding or use percentEncodedQuery directly."
@@ -777,7 +797,7 @@ struct ContentView: View {
             return
         }
         
-        // CRITICAL VALIDATION: Query structure must be intact (flowID= not flowID%3D)
+        // IMPORTANT CHECK: Query structure must be intact (flowID= not flowID%3D)
         if url.absoluteString.contains("flowID%3D") || url.absoluteString.contains("keyID%3D") {
             isRequestingChallenge = false
             backendError = "URL encoding error: structural '=' was encoded. This breaks query parsing."
@@ -908,6 +928,15 @@ struct ContentView: View {
                 self.pendingExpiresAt = challengeResp.expiresAt
                 self.lastExpiresAt = challengeResp.expiresAt
                 
+                // Add flow trace entry for challenge received
+                flowTraceEntries.append(FlowTraceEntry(
+                    step: "Challenge Received",
+                    timestamp: Date(),
+                    flowID: flowID,
+                    status: "completed",
+                    details: "challenge_id: \(challengeResp.challengeID), expiresAt: \(challengeResp.expiresAt)"
+                ))
+                
                 // Step 2: Build canonical clientData JSON
                 let bundleID = Bundle.main.bundleIdentifier ?? ""
                 let timestamp = ISO8601DateFormatter().string(from: Date())
@@ -968,15 +997,15 @@ struct ContentView: View {
     }
     
     /// Generate assertion with frontend-computed clientDataHash from canonical clientData JSON
-    /// CRITICAL: Frontend builds clientData JSON (sorted keys), computes SHA256(clientDataBytes), passes to generateAssertion
+    /// IMPORTANT (correctness): Frontend builds clientData JSON (sorted keys), computes SHA256(clientDataBytes), passes to generateAssertion
     /// IMPORTANT: One request → one assertion → store it for reuse in verify request.
     /// AssertionTrustModel.opaqueAppleAssertion: Assertion cryptographic validity is determined by
-    /// Apple Secure Enclave and attestation binding, not by local ECDSA verification.
+    /// The Secure Enclave and attestation binding, not by local ECDSA verification.
     func generateAndStoreAssertion(keyID: String, clientDataBytes: Data, clientDataHash: Data, challenge_id: String, verifyRunID: String) {
-        // State check: clientDataHash must be exactly 32 bytes (computed from clientDataBytes)
+        // State check: clientDataHash expected to be 32 bytes (computed from clientDataBytes)
         guard clientDataHash.count == 32 else {
             isGeneratingAssertion = false
-            backendError = "clientDataHash must be 32 bytes (got \(clientDataHash.count))"
+            backendError = "clientDataHash length incorrect: expected 32 bytes, got \(clientDataHash.count)"
             print("[ContentView] ERROR: generateAssertion rejected – clientDataHash length \(clientDataHash.count)")
             return
         }
@@ -999,21 +1028,21 @@ struct ContentView: View {
         
         isGeneratingAssertion = true
         
-        // CRITICAL: generateAssertion() MUST be called exactly once per request
-        // CRITICAL: clientDataHash is computed from canonical clientData JSON (sorted keys)
+        // IMPORTANT: generateAssertion() MUST be called exactly once per request (prevents double-tap, not security enforcement)
+        // IMPORTANT (correctness): clientDataHash is computed from canonical clientData JSON (sorted keys)
         print("[ContentView] Generating assertion with FRONTEND-COMPUTED clientDataHash from canonical clientData JSON...")
-        print("[ContentView]   clientDataHash length: \(clientDataHash.count) bytes (must be 32)")
+        print("[ContentView]   clientDataHash length: \(clientDataHash.count) bytes (expected 32)")
         print("[ContentView]   clientDataHash source: SHA256(clientDataBytes) where clientDataBytes = canonical JSON")
         
         // Logging check: Log bundle ID for backend comparison (backend enforces policy)
         let bundleID = Bundle.main.bundleIdentifier ?? "nil"
-        print("[ContentView]   Bundle ID (must match backend): \(bundleID)")
+        print("[ContentView]   Bundle ID (backend expects): \(bundleID)")
         if bundleID != "DanylchukStudios.AppAttestDecoderTestApp" {
             print("[ContentView]   ⚠ WARNING: Bundle ID mismatch - backend may reject based on policy")
         }
         
         // STEP 1: FREEZE THE INPUTS - Log and freeze before generateAssertion
-        assert(clientDataHash.count == 32, "clientDataHash must be exactly 32 bytes before generateAssertion")
+        assert(clientDataHash.count == 32, "clientDataHash expected to be 32 bytes before generateAssertion")
         let clientDataHash_hex = CryptoEvidence.rawHex(clientDataHash)
         let clientDataHash_sha256 = CryptoEvidence.sha256Hex(clientDataHash)
         print("[ContentView] ========================================")
@@ -1054,7 +1083,7 @@ struct ContentView: View {
                 #endif
                 self.logVerificationFingerprints(keyID: keyID, assertionObject: assertionObject, clientDataHash: clientDataHash, verifyRunID: verifyRunID)
                 self.pendingAssertionB64 = assertionObject.base64EncodedString()
-                print("[ContentView] Assertion generated and stored verifyRunID=\(verifyRunID) | assertionObject \(assertionObject.count) bytes | expiresAt: \(self.pendingExpiresAt ?? "N/A") | Tap 'Verify Assertion' to send")
+                print("[ContentView] Assertion generated and stored verifyRunID=\(verifyRunID) | assertionObject \(assertionObject.count) bytes | expiresAt: \(self.pendingExpiresAt ?? "N/A") | Tap 'Send to Backend for Verification' to send")
             }
         }
     }
@@ -1070,7 +1099,7 @@ struct ContentView: View {
             authenticatorData = pair.authenticatorData
             signature = pair.signatureDER
         } catch {
-            print("[ContentView] ✗ FORENSIC: decodeAssertionObject failed: \(error)")
+            print("[ContentView] ERROR: FORENSIC: decodeAssertionObject failed: \(error)")
             return
         }
         var signedBytes = authenticatorData
@@ -1127,7 +1156,7 @@ struct ContentView: View {
             let pair = try decoder.decodeAssertionObject(assertionObject)
             authenticatorData = pair.authenticatorData
         } catch {
-            print("[ContentView] ✗ DEBUG: decodeAssertionObject failed for signed bytes dump: \(error)")
+            print("[ContentView] ERROR: DEBUG: decodeAssertionObject failed for signed bytes dump: \(error)")
             return
         }
         var signedBytes = authenticatorData
@@ -1148,7 +1177,7 @@ struct ContentView: View {
         print("[ContentView] DEBUG: SIGNED BYTES DUMP (iOS) verifyRunID=\(verifyRunID)")
         print("[ContentView] OBSERVATIONAL — NOT VERIFIED. AssertionTrustModel.opaqueAppleAssertion.")
         print("[ContentView] ========================================")
-        print("[ContentView] ⚠ Backend must compute signedBytes from RAW BYTES, not hex/base64 strings")
+        print("[ContentView] Backend computes signedBytes from RAW BYTES, not hex/base64 strings")
         print("[ContentView] ⚠ signedBytes = authenticatorData (raw bytes) + clientDataHash (32 raw bytes)")
         print("[ContentView] ========================================")
         print("[ContentView] authenticatorData_length: \(authenticatorData.count)")
@@ -1159,11 +1188,11 @@ struct ContentView: View {
         print("[ContentView] clientDataHash_hex: \(clientDataHash_hex)")
         print("[ContentView] clientDataHash_sha256: \(clientDataHash_sha256)")
         print("[ContentView] ========================================")
-        print("[ContentView] signedBytes_length: \(signedBytes.count) (must equal authenticatorData_length + 32)")
+        print("[ContentView] signedBytes_length: \(signedBytes.count) (expected authenticatorData_length + 32)")
         print("[ContentView] signedBytes_hex: \(signedBytes_hex)")
         print("[ContentView] signedBytes_sha256: \(signedBytes_sha256)")
         print("[ContentView] ========================================")
-        print("[ContentView] Backend must match:")
+        print("[ContentView] Backend expects:")
         print("[ContentView]   - authenticatorData_sha256: \(authenticatorData_sha256)")
         print("[ContentView]   - clientDataHash_hex: \(clientDataHash_hex)")
         print("[ContentView]   - signedBytes_sha256: \(signedBytes_sha256)")
@@ -1171,10 +1200,10 @@ struct ContentView: View {
     }
     #endif
     
-    /// Log assertion fingerprints for backend comparison. Backend performs verification.
-    /// CRITICAL: clientDataHash is backend-provided - frontend NEVER computes it.
+    /// Log assertion fingerprints for backend comparison. Backend performs all verification.
+    /// IMPORTANT (correctness): clientDataHash is backend-provided - frontend NEVER computes it.
     func logVerificationFingerprints(keyID: String, assertionObject: Data, clientDataHash: Data, verifyRunID: String) {
-        // HARD GUARD: clientDataHash must be exactly 32 bytes (backend-provided)
+        // State check: clientDataHash expected to be 32 bytes (backend-provided)
         guard clientDataHash.count == 32 else {
             print("[ContentView] ERROR: logVerificationFingerprints – clientDataHash length \(clientDataHash.count), expected 32")
             return
@@ -1186,7 +1215,7 @@ struct ContentView: View {
         let keyID_sha256_prefix = String(keyID_sha256.prefix(16)) // First 8 bytes hex
         
         // Fingerprint 2: clientDataHash_hex (32 bytes) - BACKEND-PROVIDED, NOT computed
-        // CRITICAL: This is the exact hash returned by backend - frontend NEVER computes it
+        // IMPORTANT (correctness): This is the exact hash returned by backend - frontend NEVER computes it
         let clientDataHash_hex = clientDataHash.map { String(format: "%02x", $0) }.joined()
         
         // Fingerprint 3: clientDataHash_sha256 - hash of the backend-provided hash (for logging only)
@@ -1226,7 +1255,7 @@ struct ContentView: View {
         print("[ContentView]   keyID_sha256: \(keyID_sha256)")
         print("[ContentView]   clientDataHash_hex: \(clientDataHash_hex) (BACKEND-PROVIDED, NOT computed)")
         print("[ContentView]   clientDataHash_sha256: \(clientDataHash_sha256) (hash of backend-provided hash, for logging only)")
-        print("[ContentView]   clientDataHash_length: \(clientDataHash.count) bytes (must be 32)")
+        print("[ContentView]   clientDataHash_length: \(clientDataHash.count) bytes (expected 32)")
         print("[ContentView]   clientDataHash_source: BACKEND ONLY - frontend NEVER computes this")
         print("[ContentView]   assertionObject_sha256: \(assertionObject_sha256)")
         print("[ContentView]   assertionObject_length: \(assertionObject.count)")
@@ -1235,7 +1264,7 @@ struct ContentView: View {
         print("[ContentView]   signedBytes_sha256: \(signedBytes_sha256)")
         print("[ContentView]   signedBytes_length: \(signedBytes_length)")
         print("[ContentView] ========================================")
-        print("[ContentView] WARNING: Backend MUST log these EXACT same fingerprints")
+        print("[ContentView] Backend logs these fingerprints for comparison")
         print("[ContentView] WARNING: If any fingerprint differs, byte-for-byte integrity is broken")
         
         // Check assertion CBOR format (for logging, backend performs actual validation)
@@ -1270,12 +1299,12 @@ struct ContentView: View {
             }
         }
         
-        // HARD GUARD: flowID must exist - no silent fallbacks
+        // State check: flowID expected to exist - no silent fallbacks
         guard let flowID = currentFlowID else {
             isSendingToBackend = false
-            backendError = "CRITICAL: flowID is missing. Registration must succeed and return flowID first."
-            print("[ContentView] ✗ ERROR: VERIFY request attempted without flowID")
-            print("[ContentView] ✗ flowID must be provided by backend in REGISTER response")
+            backendError = "State error: flowID is missing. Registration needs to succeed and return flowID first."
+            print("[ContentView] ERROR: ERROR: VERIFY request attempted without flowID")
+                    print("[ContentView] ERROR: flowID expected from backend in REGISTER response")
             return
         }
         
@@ -1294,7 +1323,7 @@ struct ContentView: View {
         guard let registeredKeyID = registeredKeyID, registeredKeyID == keyID else {
             isSendingToBackend = false
             backendError = "KeyID mismatch! The key used for verify request does not match the registered key. Generate new key and register again."
-            print("[ContentView] ✗ ERROR: keyID mismatch in /verify request")
+            print("[ContentView] ERROR: ERROR: keyID mismatch in /verify request")
             if let registeredKeyID = registeredKeyID {
                 print("[ContentView]   Registered keyID: \(registeredKeyID)")
                 if let regKeyIDData = Data(base64Encoded: registeredKeyID) {
@@ -1308,7 +1337,7 @@ struct ContentView: View {
             return
         }
         
-        // CRITICAL: Use raw assertionObject Data directly - no parsing, no inspection, no transformation
+        // IMPORTANT (correctness): Use raw assertionObject Data directly - no parsing, no inspection, no transformation
         // This must be the exact bytes returned by DCAppAttestService.generateAssertion
         // Apple returns a CBOR map (0xa2), NOT a COSE_Sign1 (0x84 array)
         // Backend recomputes clientDataHash from clientData_base64
@@ -1344,6 +1373,15 @@ struct ContentView: View {
         }
         print("[ContentView] VERIFY verifyRunID=\(runID) | Sending assertion: \(assertionObject.count) bytes, base64 \(assertionB64.count) chars | clientData_base64: \(clientDataB64.count) chars")
         print("[ContentView] ========================================")
+        
+        // Add flow trace entry for assertion submission
+        flowTraceEntries.append(FlowTraceEntry(
+            step: "Assertion Submission",
+            timestamp: Date(),
+            flowID: flowID,
+            status: "sent",
+            details: "verifyRunID: \(runID), assertionObject: \(assertionObject.count) bytes"
+        ))
         
         guard let jsonData = try? JSONSerialization.data(withJSONObject: requestBody) else {
             isSendingToBackend = false
@@ -1423,9 +1461,27 @@ struct ContentView: View {
                         self.pendingAssertionB64 = nil
                         self.pendingExpiresAt = nil
                         print("[ContentView] RESULT verifyRunID=\(runID) | Cleared pending assertion")
+                        
+                        // Add flow trace entry for backend response
+                        flowTraceEntries.append(FlowTraceEntry(
+                            step: "Backend Response",
+                            timestamp: Date(),
+                            flowID: flowID,
+                            status: "verified",
+                            details: "Backend returned status: verified"
+                        ))
                     } else if status == "rejected" {
                         self.backendResponse = "Backend response (status: rejected): \(jsonString)"
                         print("[ContentView] RESULT verifyRunID=\(runID) | Backend returned status: rejected")
+                        
+                        // Add flow trace entry for backend response
+                        flowTraceEntries.append(FlowTraceEntry(
+                            step: "Backend Response",
+                            timestamp: Date(),
+                            flowID: flowID,
+                            status: "rejected",
+                            details: "Backend returned status: rejected"
+                        ))
                     }
                 }
             }
@@ -1488,12 +1544,12 @@ struct ContentView: View {
                         pingResult: pingResult,
                         isPinging: isPinging,
                         onPingBackend: { self.pingBackend() },
-                        groundTruthPublicKeyX963: $groundTruthPublicKeyX963,
-                        onAttestationSucceeded: { self.onAttestationSucceededForGroundTruth($0, keyID: $1) },
-                        onCopyGroundTruthBundle: { self.copyGroundTruthBundle() },
-                        canCopyGroundTruth: groundTruthPublicKeyX963 != nil,
+                        evidencePublicKeyX963: $evidencePublicKeyX963,
+                        onAttestationSucceeded: { self.onAttestationSucceededForEvidence($0, keyID: $1) },
+                        onCopyEvidenceBundle: { self.copyEvidenceBundle() },
+                        canCopyEvidence: evidencePublicKeyX963 != nil,
                         onCopyOpenSSLPayload: { self.copyOpenSSLPayload() },
-                        canCopyOpenSSLPayload: (groundTruthPublicKeyX963 ?? storedPublicKeyX963 ?? EvidenceStore.shared.getLast()?.publicKeyX963) != nil && EvidenceStore.shared.getLast() != nil
+                        canCopyOpenSSLPayload: (evidencePublicKeyX963 ?? storedPublicKeyX963 ?? EvidenceStore.shared.getLast()?.publicKeyX963) != nil && EvidenceStore.shared.getLast() != nil
                     )
                     .transition(.asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .trailing)))
                 } else {
@@ -1521,6 +1577,19 @@ struct ContentView: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Done") { showDiffView = false }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showFlowTrace) {
+            NavigationStack {
+                FlowTraceView(entries: $flowTraceEntries)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") { showFlowTrace = false }
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Clear") { flowTraceEntries.removeAll() }
                     }
                 }
             }
@@ -1572,10 +1641,10 @@ struct LiveInspectorView: View {
     var pingResult: String?
     var isPinging: Bool
     let onPingBackend: () -> Void
-    @Binding var groundTruthPublicKeyX963: Data?
+    @Binding var evidencePublicKeyX963: Data?
     let onAttestationSucceeded: (Data, String) -> Void
-    let onCopyGroundTruthBundle: () -> Void
-    var canCopyGroundTruth: Bool
+    let onCopyEvidenceBundle: () -> Void
+    var canCopyEvidence: Bool
     let onCopyOpenSSLPayload: () -> Void
     var canCopyOpenSSLPayload: Bool
 
@@ -1610,7 +1679,7 @@ struct LiveInspectorView: View {
                     }
 
                 if let isSupported {
-                    Text(isSupported ? "✅ Supported" : "❎ Not Supported")
+                    Text(isSupported ? "Supported" : "Not Supported")
                 } else {
                     Text("Not checked")
                         .foregroundStyle(.secondary)
@@ -1627,7 +1696,7 @@ struct LiveInspectorView: View {
                         currentFlowID = nil
                         storedPublicKeyX963 = nil
                         currentVerifyRunID = nil
-                        groundTruthPublicKeyX963 = nil
+                        evidencePublicKeyX963 = nil
                         EvidenceStore.shared.clear()
                         backendResponse = nil
                         backendError = nil
@@ -1654,20 +1723,20 @@ struct LiveInspectorView: View {
                                     self.pendingAssertionB64 = nil
                                     self.pendingExpiresAt = nil
                                     self.registrationSucceeded = false
-                                    self.registeredKeyID = nil // Clear registered keyID - new key must be registered
-                                    self.currentFlowID = nil // Clear flowID - new key must be registered
+                                    self.registeredKeyID = nil // Clear registered keyID - new key needs to be registered
+                                    self.currentFlowID = nil // Clear flowID - new key needs to be registered
                                     self.storedPublicKeyX963 = nil
                                     self.currentVerifyRunID = nil
                                     EvidenceStore.shared.clear()
                                     // Store in both @State (for UI) and KeyManager (for persistence)
                                     self.keyID = keyID
-                                    self.keyManager.setKeyID(keyID) // CRITICAL: Store in singleton for key continuity
+                                    self.keyManager.setKeyID(keyID) // IMPORTANT: Store in singleton for key continuity (state consistency, not security)
                                     self.keyIDError = nil
                                     print("[ContentView] GENERATE KEY - keyID: \(keyID)")
                                     if let keyIDData = Data(base64Encoded: keyID) {
                                         let keyIDHex = keyIDData.map { String(format: "%02x", $0) }.joined()
                                         print("[ContentView] GENERATE KEY - keyID (hex): \(keyIDHex)")
-                                        print("[ContentView] ⚠ This keyID MUST be used for both attestation AND assertion")
+                                        print("[ContentView] This keyID is used for both attestation AND assertion")
                                     }
                                 } else {
                                     self.keyID = nil
@@ -1741,7 +1810,7 @@ struct LiveInspectorView: View {
                     Button("Attest Key") {
                         attestationError = nil
                         attestationBlobB64 = nil
-                        groundTruthPublicKeyX963 = nil
+                        evidencePublicKeyX963 = nil
 
                         guard service.isSupported else {
                             attestationError = "App Attest not supported on this device / configuration."
@@ -1756,7 +1825,7 @@ struct LiveInspectorView: View {
                         // IMPORTANT: State consistency check - verify we're using the same keyID from KeyManager (for UI consistency, not security)
                         guard let storedKeyID = keyManager.getKeyID(), storedKeyID == keyID else {
                             attestationError = "KeyID mismatch! Key may have been regenerated. Generate key again."
-                            print("[ContentView] ✗ ERROR: keyID from state (\(keyID)) does not match KeyManager (\(keyManager.getKeyID() ?? "nil"))")
+                            print("[ContentView] ERROR: ERROR: keyID from state (\(keyID)) does not match KeyManager (\(keyManager.getKeyID() ?? "nil"))")
                             return
                         }
 
@@ -1767,16 +1836,16 @@ struct LiveInspectorView: View {
                             let keyIDFingerprint = sha256Hex(keyIDData)
                             print("[ContentView] ATTEST - keyID (hex): \(keyIDHex)")
                             print("[ContentView] ATTEST - keyID SHA256: \(keyIDFingerprint)")
-                            print("[ContentView] ⚠ This keyID MUST match the one used in VERIFY")
+                            print("[ContentView] This keyID matches the one used in VERIFY")
                             
-                            // Verify keyID matches KeyManager
+                            // State consistency check: keyID matches KeyManager (for UI consistency, not security)
                             if let storedKeyID = keyManager.getKeyID() {
                                 if let storedKeyIDData = Data(base64Encoded: storedKeyID) {
                                     let storedKeyIDFingerprint = sha256Hex(storedKeyIDData)
                                     if keyIDFingerprint == storedKeyIDFingerprint {
-                                        print("[ContentView] ✓ ATTEST keyID matches KeyManager - key continuity check passed (state consistency)")
+                                        print("[ContentView] ATTEST keyID matches KeyManager - key continuity check passed (state consistency)")
                                     } else {
-                                        print("[ContentView] ✗ ERROR: ATTEST keyID does NOT match KeyManager!")
+                                        print("[ContentView] ERROR: ERROR: ATTEST keyID does NOT match KeyManager!")
                                         print("[ContentView]   ATTEST keyID SHA256: \(keyIDFingerprint)")
                                         print("[ContentView]   KeyManager keyID SHA256: \(storedKeyIDFingerprint)")
                                     }
@@ -1793,7 +1862,7 @@ struct LiveInspectorView: View {
                         let clientDataContext = ClientDataContextManager.shared.getOrCreateContext(for: keyID)
                         let clientDataHash = clientDataContext.clientDataHash
                         
-                        // GUARD: clientDataHash must be exactly 32 bytes
+                        // GUARD: clientDataHash expected to be 32 bytes
                         guard clientDataHash.count == 32 else {
                             attestationError = "Invalid clientDataHash length: \(clientDataHash.count) bytes (expected 32)"
                             print("[ContentView] ERROR: clientDataHash length \(clientDataHash.count), expected 32")
@@ -1816,7 +1885,7 @@ struct LiveInspectorView: View {
                                 if let error {
                                     self.attestationError = error.localizedDescription
                                     self.attestationBlobB64 = nil
-                                    self.groundTruthPublicKeyX963 = nil
+                                    self.evidencePublicKeyX963 = nil
                                     print("AttestKey error: \(error)")
                                 } else if let attestBlob {
                                     self.attestationBlobB64 = attestBlob.base64EncodedString()
@@ -1827,7 +1896,7 @@ struct LiveInspectorView: View {
                                 } else {
                                     self.attestationError = "Attestation failed with no error (unsupported or misconfigured)."
                                     self.attestationBlobB64 = nil
-                                    self.groundTruthPublicKeyX963 = nil
+                                    self.evidencePublicKeyX963 = nil
                                     print("AttestKey returned nil blob and nil error")
                                 }
                             }
@@ -1911,11 +1980,11 @@ struct LiveInspectorView: View {
                         }
                         
                         guard attestationBlobB64 != nil else {
-                            backendError = "Key must be attested before generating assertions. Tap 'Attest Key' first."
+                            backendError = "Key not attested. Tap 'Attest Key' first."
                             return
                         }
                         
-                        // CRITICAL: Request challenge from backend, build canonical clientData, compute SHA256, generate assertion
+                        // IMPORTANT: Request challenge from backend, build canonical clientData, compute SHA256, generate assertion
                         onRequestChallengeAndGenerateAssertion(keyID)
                     }
                     .buttonStyle(.bordered)
@@ -2008,20 +2077,20 @@ struct LiveInspectorView: View {
                                     ProgressView()
                                         .scaleEffect(0.8)
                                 }
-                                Text(isRegistering ? "Registering..." : registrationSucceeded ? "Registered ✓" : "Register Attestation")
+                                Text(isRegistering ? "Registering..." : registrationSucceeded ? "Registered (flowID received)" : "Register Attestation")
                             }
                             .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)
                         .disabled(isRegistering || isSendingToBackend || isRequestingChallenge || registrationSucceeded || !hasChallenge)
-                        .help("Sends keyID, attestationObject, challenge_base64. Required before verification.")
+                        .help("Sends keyID, attestationObject, challenge_base64 to backend. Registration completes before sending assertions.")
                         if !hasChallenge {
                             Text("challenge_base64 missing: tap Attest Key first.")
                                 .font(.caption)
                                 .foregroundStyle(.orange)
                         }
                     } else {
-                        Text("Attest key first to enable registration")
+                        Text("Attest key first to proceed with registration")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -2038,7 +2107,7 @@ struct LiveInspectorView: View {
                         .pickerStyle(.segmented)
                     }
 
-                    // Phase 2: Verify Assertion - uses stored assertion from "Assert Key" button
+                    // Phase 2: Send Assertion to Backend for Verification - uses stored assertion from "Assert Key" button
                     if registrationSucceeded {
                         Button {
                             guard let keyID else {
@@ -2070,7 +2139,7 @@ struct LiveInspectorView: View {
                                     ProgressView()
                                         .scaleEffect(0.8)
                                 }
-                                Text(isSendingToBackend ? "Verifying..." : "Verify Assertion")
+                                Text(isSendingToBackend ? "Sending to backend..." : "Send to Backend for Verification")
                             }
                             .frame(maxWidth: .infinity)
                         }
@@ -2082,14 +2151,18 @@ struct LiveInspectorView: View {
                             if !newValue && (isSendingToBackend || isRequestingChallenge) {
                                 isSendingToBackend = false
                                 isRequestingChallenge = false
-                                backendError = "Registration failed. Cannot verify assertion."
+                                backendError = "Registration failed. Cannot send assertion to backend for verification."
                             }
                         }
                         
-                        // Diff View (dev-only): compare iOS truth to backend forensics when verify fails
+                        // Diff View (dev-only): compare iOS evidence to backend forensics when backend verification fails
                         Button("Diff View") { showDiffView = true }
                             .disabled(lastBackendForensics == nil)
-                            .help("If verify fails and backend debug is enabled, open Diff View.")
+                            .help("If backend verification fails and backend debug is enabled, open Diff View.")
+                        
+                        // Flow Trace View
+                        Button("Flow Trace") { showFlowTrace = true }
+                            .help("View diagnostic flow trace: registration → challenge → assertion submission")
 
                         Button("Copy Canonical Block") {
                             let s = EvidenceStore.shared.getLast()?.canonicalJSONLine() ?? ""
@@ -2098,8 +2171,8 @@ struct LiveInspectorView: View {
                         .disabled(EvidenceStore.shared.getLast() == nil)
                         .help("Copy FRONTEND_CANONICAL JSON for the last run to clipboard.")
 
-                        Button("Copy Evidence Bundle") { onCopyGroundTruthBundle() }
-                            .disabled(!canCopyGroundTruth)
+                        Button("Copy Evidence Bundle") { onCopyEvidenceBundle() }
+                            .disabled(!canCopyEvidence)
                             .help("Copy OpenSSL-ready JSON: publicKey (x5c[0] SPKI), authenticatorData, clientDataHash, signedBytes, signature (for backend comparison).")
 
                         Button("Copy OpenSSL Payload") { onCopyOpenSSLPayload() }
@@ -2121,7 +2194,7 @@ struct LiveInspectorView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    // CRITICAL: Prevent double-tap - button is disabled during in-flight request
+                    // IMPORTANT: Prevent double-tap - button is disabled during in-flight request (UI flow control, not security)
                     // This prevents double-tap: generateAssertion() is called exactly once per verification request
                     
                     if let backendResponse {
@@ -2268,15 +2341,15 @@ struct ShareSheet: UIViewControllerRepresentable {
 
 extension ContentView {
     /// Request clientDataHash from backend, use it once, send only assertion
-    /// CRITICAL: Frontend NEVER computes clientDataHash - only uses backend-provided hash
+    /// IMPORTANT (correctness): Frontend NEVER computes clientDataHash - only uses backend-provided hash
     /// Step 1: POST /app-attest/client-data-hash { keyID } -> { clientDataHash: base64, expiresAt: ISO8601 }
     /// Step 2: Generate assertion with backend-issued clientDataHash (exact 32 bytes, byte-for-byte)
     /// Step 3: POST /app-attest/verify { keyID, assertionObject } (NO clientDataHash sent - backend uses stored one)
     /// NOTE: This function is kept for backward compatibility but is now replaced by Generate Assertion + Verify Assertion flow
     func requestClientDataHashAndVerify(keyID: String) {
-        // HARD GATE: Fail fast if registration didn't succeed
+        // State check: Fail fast if registration didn't succeed
         guard registrationSucceeded else {
-            backendError = "Attestation must be registered first. Tap 'Register Attestation' and wait for success."
+            backendError = "Attestation not registered. Tap 'Register Attestation' and wait for success."
             return
         }
         
@@ -2312,12 +2385,12 @@ extension ContentView {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // HARD GUARD: flowID must exist - no silent fallbacks
+        // State check: flowID expected to exist - no silent fallbacks
         guard let flowID = currentFlowID else {
             isRequestingChallenge = false
-            backendError = "CRITICAL: flowID is missing. Registration must succeed and return flowID first."
-            print("[ContentView] ✗ ERROR: CLIENT_DATA_HASH request attempted without flowID")
-            print("[ContentView] ✗ flowID must be provided by backend in REGISTER response")
+            backendError = "State error: flowID is missing. Registration needs to succeed and return flowID first."
+            print("[ContentView] ERROR: ERROR: CLIENT_DATA_HASH request attempted without flowID")
+                    print("[ContentView] ERROR: flowID expected from backend in REGISTER response")
             return
         }
         
@@ -2390,7 +2463,7 @@ extension ContentView {
                     print("[ContentView] ERROR: Failed to decode clientDataHash. String: \(clientDataHashB64). Raw: \(rawResponseString)")
                     return
                 }
-                // GUARD: clientDataHash must be exactly 32 bytes. This exact Data is passed to generateAssertion with no transformations.
+                // GUARD: clientDataHash expected to be 32 bytes. This exact Data is passed to generateAssertion with no transformations.
                 guard clientDataHash.count == 32 else {
                     self.backendError = "Invalid clientDataHash length: \(clientDataHash.count) bytes (expected 32)"
                     print("[ContentView] ERROR: clientDataHash length \(clientDataHash.count), expected 32. Raw: \(rawResponseString)")
@@ -2403,14 +2476,14 @@ extension ContentView {
     }
     
     /// Generate assertion with server-issued clientDataHash and send to backend.
-    /// CRITICAL: clientDataHash MUST be provided by backend - frontend NEVER computes it.
+    /// IMPORTANT (correctness): clientDataHash MUST be provided by backend - frontend NEVER computes it.
     /// AssertionTrustModel.opaqueAppleAssertion: Assertion cryptographic validity is determined by
-    /// Apple Secure Enclave and attestation binding, not by local ECDSA verification.
+    /// The Secure Enclave and attestation binding, not by local ECDSA verification.
     func generateAndSendAssertion(keyID: String, clientDataHash: Data, verifyRunID: String) {
-        // HARD GUARD: clientDataHash must be exactly 32 bytes (backend-provided)
+        // State check: clientDataHash must be exactly 32 bytes (backend-provided)
         guard clientDataHash.count == 32 else {
             isSendingToBackend = false
-            backendError = "clientDataHash must be 32 bytes (got \(clientDataHash.count))"
+            backendError = "clientDataHash length incorrect: expected 32 bytes, got \(clientDataHash.count)"
             print("[ContentView] ERROR: generateAndSendAssertion rejected – clientDataHash length \(clientDataHash.count)")
             return
         }
@@ -2434,23 +2507,23 @@ extension ContentView {
         isSendingToBackend = true
         
         // IMPORTANT: generateAssertion() MUST be called exactly once per verification request (prevents double-tap, not security enforcement)
-        // CRITICAL: The returned assertion Data MUST be sent to the backend byte-for-byte
-        // CRITICAL: clientDataHash is backend-provided - frontend NEVER computes it
+        // IMPORTANT (correctness): The returned assertion Data MUST be sent to the backend byte-for-byte
+        // IMPORTANT (correctness): clientDataHash is backend-provided - frontend NEVER computes it
         // No additional generateAssertion() calls may occur for inspection, preview, retry, or logging
         
         print("[ContentView] Generating assertion with BACKEND-PROVIDED clientDataHash (frontend NEVER computes hash)...")
-        print("[ContentView]   clientDataHash length: \(clientDataHash.count) bytes (must be 32)")
+        print("[ContentView]   clientDataHash length: \(clientDataHash.count) bytes (expected 32)")
         print("[ContentView]   clientDataHash source: BACKEND ONLY (no frontend computation)")
         
         // Logging check: Log bundle ID for backend comparison (backend enforces policy)
         let bundleID = Bundle.main.bundleIdentifier ?? "nil"
-        print("[ContentView]   Bundle ID (must match backend): \(bundleID)")
+        print("[ContentView]   Bundle ID (backend expects): \(bundleID)")
         if bundleID != "DanylchukStudios.AppAttestDecoderTestApp" {
             print("[ContentView]   ⚠ WARNING: Bundle ID mismatch - backend may reject based on policy")
         }
         
         // STEP 1: FREEZE THE INPUTS - Log and freeze before generateAssertion. Never re-encode, hash, or regenerate clientDataHash.
-        assert(clientDataHash.count == 32, "clientDataHash must be exactly 32 bytes before generateAssertion")
+        assert(clientDataHash.count == 32, "clientDataHash expected to be 32 bytes before generateAssertion")
         let clientDataHash_hex = clientDataHash.map { String(format: "%02x", $0) }.joined()
         let clientDataHash_sha256 = sha256Hex(clientDataHash)
         let clientDataHash_objectID = ObjectIdentifier(clientDataHash as NSData)
@@ -2489,12 +2562,12 @@ extension ContentView {
                 self.dumpSignedBytes(assertionObject: assertionObject, clientDataHash: clientDataHash, verifyRunID: verifyRunID)
                 #endif
                 
-                // CRITICAL: Log fingerprints AFTER generation and BEFORE sending
+                // IMPORTANT (correctness): Log fingerprints AFTER generation and BEFORE sending
                 self.logVerificationFingerprints(keyID: keyID, assertionObject: assertionObject, clientDataHash: clientDataHash, verifyRunID: verifyRunID)
                 
-                // CRITICAL: Send assertion immediately - no storage, no reuse, no regeneration
-                // CRITICAL: Send only keyID and assertionObject (backend uses stored clientDataHash)
-                // CRITICAL: Frontend NEVER sends clientDataHash - backend owns it
+                // IMPORTANT (correctness): Send assertion immediately - no storage, no reuse, no regeneration
+                // IMPORTANT (correctness): Send only keyID and assertionObject (backend uses stored clientDataHash)
+                // IMPORTANT (correctness): Frontend NEVER sends clientDataHash - backend owns it
                 self.sendAssertionToBackend(keyID: keyID, assertionObject: assertionObject, verifyRunID: verifyRunID)
             }
         }
