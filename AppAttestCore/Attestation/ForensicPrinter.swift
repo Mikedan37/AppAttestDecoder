@@ -681,7 +681,7 @@ extension AttestationObject {
                 }
             } else {
                 // Not CMS or parse failed - try other formats
-                receiptContent += transcript.twoColumnField(key: "CONTAINER TYPE", value: "◻ Unknown (not CMS SignedData)")
+                receiptContent += transcript.twoColumnField(key: "CONTAINER TYPE", value: "[unknown] Unknown (not CMS SignedData)")
                 receiptContent += transcript.twoColumnField(key: "RAW SIZE", value: "\(receiptData.count) bytes")
                 
                 // Try to detect structure
